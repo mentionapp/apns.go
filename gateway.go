@@ -88,7 +88,7 @@ func (g *Gateway) Errors(onError OnErrorCallback) {
 	g.onError = onError
 }
 
-// newGateway does all the gatewat initialisation once the gateway name is known
+// newGateway does all the gateway initialisation once the gateway name is known
 func (g *Gateway) newGateway(ctx context.Context, certificateFile, keyFile string) (*Gateway, error) {
 
 	gips, err := lookupGateway(g.gateway)

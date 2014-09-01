@@ -37,6 +37,7 @@ func NewSender(ctx context.Context, gateway, ip, certificateFile, keyFile string
 	return s, nil
 }
 
+// Send enqueues a new push notification to the sender and initiate the sending of all of them
 func (s *Sender) Send(pn *PushNotification) {
 
 	s.waitingQueue.enqueue(pn)
@@ -82,14 +83,13 @@ func (s *Sender) senderJob(ctx context.Context) {
 		case pnr := <-s.pnrc:
 			// The push notification response is not identifiable: Abort
 			// It's a side effect of an error on another push notification and it is managed
-			// by requeueing in `workingQueue` the push notification behind the push notification with an error
+			// by requeueing in `workingQueue` the push notifications behind the push notification with an error
 			if pnr.Identifier == 0 {
 				continue
 			}
 			// A new response is arrived
 			// - it's a success: Forget about this push notification
-			// - it's an error due to a connection close by the APNs requeue the push notification and the push notifications behind this one
-			// - it's an APNs error or another local error (not retry): Gives the information to the client
+			// - it's an APNs error or another local error (not retry): Gives the information to the client and requeue the push notifications behind this one
 			if pnr.Success == true {
 				// TODO GSE: Here, should we remove all the push notification ahead this one?
 				s.sendingQueue.Remove(pnr.Identifier)
