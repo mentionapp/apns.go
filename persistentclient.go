@@ -11,9 +11,17 @@ import (
 	"code.google.com/p/go.net/context"
 )
 
+type client struct {
+	gateway           string
+	certificateFile   string
+	certificateBase64 string
+	keyFile           string
+	keyBase64         string
+}
+
 // PersistentClient opens a persistent connexion with the gateway
 type PersistentClient struct {
-	client *Client
+	client *client
 	conn   net.Conn
 	ip     string
 }
@@ -22,7 +30,7 @@ type PersistentClient struct {
 func NewPersistentClient(gateway, ip, certificateFile, keyFile string) (*PersistentClient, error) {
 
 	var c *PersistentClient = &PersistentClient{}
-	c.client = NewClient(gateway, certificateFile, keyFile)
+	c.client = &client{gateway: gateway, certificateFile: certificateFile, keyFile: keyFile}
 	c.ip = ip
 	err := c.Connect()
 	if err != nil {
@@ -55,17 +63,17 @@ func (c *PersistentClient) Reconnect() error {
 		c.closeAndNil()
 	}
 
-	if len(c.client.CertificateBase64) == 0 && len(c.client.KeyBase64) == 0 {
+	if len(c.client.certificateBase64) == 0 && len(c.client.keyBase64) == 0 {
 		// The user did not specify raw block contents, so check the filesystem.
-		cert, err = tls.LoadX509KeyPair(c.client.CertificateFile, c.client.KeyFile)
+		cert, err = tls.LoadX509KeyPair(c.client.certificateFile, c.client.keyFile)
 	} else {
 		// The user provided the raw block contents, so use that.
-		cert, err = tls.X509KeyPair([]byte(c.client.CertificateBase64), []byte(c.client.KeyBase64))
+		cert, err = tls.X509KeyPair([]byte(c.client.certificateBase64), []byte(c.client.keyBase64))
 	}
 	if err != nil {
 		return err
 	}
-	gatewayParts := strings.Split(c.client.Gateway, ":")
+	gatewayParts := strings.Split(c.client.gateway, ":")
 	conf := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ServerName:   gatewayParts[0],
@@ -88,7 +96,7 @@ func (c *PersistentClient) Reconnect() error {
 		return err
 	}
 	c.conn = net.Conn(tlsConn)
-	log.Printf("Address of %s is %s", c.client.Gateway, c.conn.RemoteAddr().String())
+	log.Printf("Address of %s is %s", c.client.gateway, c.conn.RemoteAddr().String())
 	return nil
 }
 
@@ -156,7 +164,7 @@ func (c *PersistentClient) Close() {
 // Close and nil a conn
 // Used to not forget to nil the connection
 func (c *PersistentClient) closeAndNil() {
-	log.Printf("Closing %s at address %s", c.client.Gateway, c.conn.RemoteAddr().String())
+	log.Printf("Closing %s at address %s", c.client.gateway, c.conn.RemoteAddr().String())
 	c.conn.Close()
 	c.conn = nil
 }

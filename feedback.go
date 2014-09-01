@@ -39,28 +39,28 @@ func NewFeedbackResponse() (resp *FeedbackResponse) {
 // Feedback consists of device tokens that should
 // not be sent to in the future; Apple *does* monitor that
 // you respect this so you should be checking it ;)
-func (client *Client) ListenForFeedback() (err error) {
+func (client *client) ListenForFeedback() (err error) {
 	var cert tls.Certificate
 
-	if len(client.CertificateBase64) == 0 && len(client.KeyBase64) == 0 {
+	if len(client.certificateBase64) == 0 && len(client.keyBase64) == 0 {
 		// The user did not specify raw block contents, so check the filesystem.
-		cert, err = tls.LoadX509KeyPair(client.CertificateFile, client.KeyFile)
+		cert, err = tls.LoadX509KeyPair(client.certificateFile, client.keyFile)
 	} else {
 		// The user provided the raw block contents, so use that.
-		cert, err = tls.X509KeyPair([]byte(client.CertificateBase64), []byte(client.KeyBase64))
+		cert, err = tls.X509KeyPair([]byte(client.certificateBase64), []byte(client.keyBase64))
 	}
 
 	if err != nil {
 		return err
 	}
 
-	gatewayParts := strings.Split(client.Gateway, ":")
+	gatewayParts := strings.Split(client.gateway, ":")
 	conf := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		ServerName: gatewayParts[0],
+		ServerName:   gatewayParts[0],
 	}
 
-	conn, err := net.Dial("tcp", client.Gateway)
+	conn, err := net.Dial("tcp", client.gateway)
 	if err != nil {
 		return err
 	}
