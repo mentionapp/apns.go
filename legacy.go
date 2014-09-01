@@ -7,7 +7,7 @@ package apns
 
 // These variables map old identifiers to their current format.
 var (
-	APPLE_PUSH_RESPONSES     = ApplePushResponses
+	APPLE_PUSH_RESPONSES     = ApplePushResponseDescriptions
 	FEEDBACK_TIMEOUT_SECONDS = FeedbackTimeoutSeconds
 	MAX_PAYLOAD_SIZE_BYTES   = MaxPayloadSizeBytes
 	TIMEOUT_SECONDS          = TimeoutSeconds

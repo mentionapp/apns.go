@@ -149,7 +149,7 @@ func (client *Client) ConnectAndWrite(resp *PushNotificationResponse, payload []
 	select {
 	case r := <-responseChannel:
 		resp.Success = false
-		resp.AppleResponse = ApplePushResponses[r[1]]
+		resp.AppleResponse = ApplePushResponseDescriptions[r[1]]
 		err = errors.New(resp.AppleResponse)
 	case <-timeoutChannel:
 		resp.Success = true
