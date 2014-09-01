@@ -26,7 +26,7 @@ type PersistentClient struct {
 	ip     string
 }
 
-// NewPersistentClient create a new persistent connection to
+// NewPersistentClient creates a new persistent connection to the APNs servers
 func NewPersistentClient(gateway, ip, certificateFile, keyFile string) (*PersistentClient, error) {
 
 	var c *PersistentClient = &PersistentClient{}
@@ -39,7 +39,8 @@ func NewPersistentClient(gateway, ip, certificateFile, keyFile string) (*Persist
 	return c, err
 }
 
-//
+// Connect connects the persistent client to one of the APNs server
+// If the connection is already established and was not closed, it does nothing.
 func (c *PersistentClient) Connect() error {
 
 	// Check if there is already a connection
@@ -52,7 +53,7 @@ func (c *PersistentClient) Connect() error {
 	return c.Reconnect()
 }
 
-// reconnect forces a new connection to the gateway
+// Reconnect forces a new connection to the gateway
 // If a connection exists it is closed before the creation of a new one
 func (c *PersistentClient) Reconnect() error {
 
@@ -129,7 +130,6 @@ func (c *PersistentClient) Send(ctx context.Context, pn *PushNotification) *Push
 		buffer := make([]byte, 6)
 		_, err := c.conn.Read(buffer)
 		if err != nil {
-			log.Println("Read error is ", err)
 			buffer[0] = LocalResponseCommand
 			e, ok := err.(net.Error)
 			switch {
@@ -157,13 +157,14 @@ func (c *PersistentClient) Send(ctx context.Context, pn *PushNotification) *Push
 	return resp
 }
 
+// Close closes the persistent client
 func (c *PersistentClient) Close() {
 	c.closeAndNil()
 }
 
-// Close and nil a conn
-// Used to not forget to nil the connection
+// closeAndNil closes a persistent connection and set the conn to nil
 func (c *PersistentClient) closeAndNil() {
+	// Used to not forget to nil the connection
 	log.Printf("Closing %s at address %s", c.client.gateway, c.conn.RemoteAddr().String())
 	c.conn.Close()
 	c.conn = nil

@@ -35,9 +35,9 @@ type ips struct {
 	ipMap map[string]int8 // Save the usage of each IP available
 }
 
-//
+// Gateway keeps all the informations needed to communicate with the APNs
 type Gateway struct {
-	gateway   string                         // The gateway name could be either `gatewayName` or `gatewaySandboxName`
+	gateway   string                         // The gateway name could be either `gatewayName`, `gatewaySandboxName` or a custom host:port
 	gips      ips                            // save the balance of used IPs for the `gateway`
 	responses chan *PushNotificationResponse // Channel of errors, directly from senders
 	onError   OnErrorCallback                // Error callback to execute client code on error
@@ -52,14 +52,14 @@ func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
-// NewGateway creates a new client interface to the Apple APNs production servers
+// NewGateway creates a new gateway interface to the Apple APNs production servers
 func NewGateway(ctx context.Context, certificateFile, keyFile string) (*Gateway, error) {
 
 	gw := gatewayName + ":" + gatewayPort
 	return NewCustomGateway(ctx, gw, certificateFile, keyFile)
 }
 
-// NewSandboxGateway creates a new client interface to the Apple APNs sandbox servers
+// NewSandboxGateway creates a new gateway interface to the Apple APNs sandbox servers
 func NewSandboxGateway(ctx context.Context, certificateFile, keyFile string) (*Gateway, error) {
 
 	gw := gatewaySandboxName + ":" + gatewaySandboxPort
@@ -74,7 +74,7 @@ func NewCustomGateway(ctx context.Context, gateway, certificateFile, keyFile str
 	return g.newGateway(ctx, certificateFile, keyFile)
 }
 
-// Send uses one of the sender to send the push notification
+// Send uses one of the gateway sender to send the push notification
 func (g *Gateway) Send(pn *PushNotification) {
 
 	min := 0
@@ -83,6 +83,8 @@ func (g *Gateway) Send(pn *PushNotification) {
 	g.senders[n].Send(pn)
 }
 
+// Errors gives feedback to the library client on which push notifications got errors
+// The library client has to provide a callback via this method to get error informations.
 func (g *Gateway) Errors(onError OnErrorCallback) {
 
 	g.onError = onError
@@ -136,9 +138,9 @@ func (g *Gateway) newSender(ctx context.Context, certificateFile, keyFile string
 }
 
 // balanceGatewayIps chooses the best ip for the gateway
-// TODO GSE: Should probably get feedbacks from the clients to minus one an IP when it is freed by a sender
 func (g *Gateway) balanceGatewayIps() string {
 
+	// TODO(GSE): Should probably get feedbacks from the clients to minus one an IP when it is freed by a sender
 	minNbUsage := int8(math.MaxInt8) // Initialize it at the max value possible to track the best choice available
 	bestip := ""
 	g.gips.mu.Lock()
@@ -205,13 +207,14 @@ func cachedLookupGateway(gateway string) (gatewayIPs, error) {
 	return lookupGateway(gateway)
 }
 
+// pickGatewayIP picks an IP of the gateway
 func pickGatewayIP(gateway string) (string, error) {
 
 	ips, err := cachedLookupGateway(gateway)
 	if err != nil {
 		return "", err
 	}
-	// TODO GSE: Make the pick better
+	// TODO(GSE): Make the pick better
 	// IPs picks should be balanced between all the IPs available for the gateway
 	//
 	min := 0

@@ -7,6 +7,7 @@ import (
 	"code.google.com/p/go.net/context"
 )
 
+// Sender is informations needed to send push notifications to the APNs
 type Sender struct {
 	client       *PersistentClient              // The client that sends push notifications to the APNs
 	waitingQueue pushNotificationQueue          // Queue of push notification waiting for to be sent
@@ -16,11 +17,10 @@ type Sender struct {
 	pnrec        chan *PushNotificationResponse // Push Notification Response Error Channel: the channel to send error back to the `gateway`
 }
 
-// newSender creates a sender:
-// - Manage the connection with the APNs
-// - Manage the waitingQueue of push notifications
-//   - requeue the push notifications with a temporary error
-//   - report errors to the dispatcher
+// NewSender creates a sender.
+// It Manages the connection with the APNs, the waitingQueue of push notifications:
+// - requeue the push notifications with a temporary error
+// - report errors to the caller
 func NewSender(ctx context.Context, gateway, ip, certificateFile, keyFile string) (*Sender, error) {
 
 	c, err := NewPersistentClient(gateway, ip, certificateFile, keyFile)
@@ -37,7 +37,7 @@ func NewSender(ctx context.Context, gateway, ip, certificateFile, keyFile string
 	return s, nil
 }
 
-// Send enqueues a new push notification to the sender and initiate the sending of all of them
+// Send enqueues a new push notification to the sender and initiate the sending of all the push notification already queued
 func (s *Sender) Send(pn *PushNotification) {
 
 	s.waitingQueue.enqueue(pn)
@@ -47,6 +47,7 @@ func (s *Sender) Send(pn *PushNotification) {
 	}
 }
 
+// senderJob does the loop connection, send push notifications, manage errors
 func (s *Sender) senderJob(ctx context.Context) {
 
 	cnxc := make(chan struct{}) // Chan to manage re-connections
