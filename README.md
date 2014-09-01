@@ -6,7 +6,7 @@ Utilities for Apple Push Notification and Feedback Services.
 
 ## Installation
 
-`go get github.com/gsempe/apns`
+`go get github.com/gsempe/apns/core`
 
 ## Documentation
 
