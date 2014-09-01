@@ -2,28 +2,28 @@
 
 Utilities for Apple Push Notification and Feedback Services.
 
-[![GoDoc](https://godoc.org/github.com/anachronistic/apns?status.png)](https://godoc.org/github.com/anachronistic/apns)
+[![GoDoc](https://godoc.org/github.com/gsempe/apns?status.png)](https://godoc.org/github.com/gsempe/apns)
 
 ## Installation
 
-`go get github.com/anachronistic/apns`
+`go get github.com/gsempe/apns`
 
 ## Documentation
 
-- [APNS package documentation](http://godoc.org/github.com/anachronistic/apns)
+- [APNS package documentation](http://godoc.org/github.com/gsempe/apns)
 - [Information on the APN JSON payloads](http://developer.apple.com/library/mac/#documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/Chapters/ApplePushService.html)
 - [Information on the APN binary protocols](http://developer.apple.com/library/ios/#documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/Chapters/CommunicatingWIthAPS.html)
 - [Information on APN troubleshooting](http://developer.apple.com/library/ios/#technotes/tn2265/_index.html)
 
 ## Usage
 
-### Creating pns and payloads manually
+### Creating push notification and payload
 ```go
 package main
 
 import (
   "fmt"
-  apns "github.com/anachronistic/apns"
+  apns "github.com/gsempe/apns"
 )
 
 func main() {
@@ -40,7 +40,8 @@ func main() {
 }
 ```
 
-#### Returns
+`Println` output:
+
 ```json
 {
   "aps": {
@@ -50,6 +51,12 @@ func main() {
   }
 }
 ```
+
+### Sending a notification
+
+todo(gse): Add documentation to send push notifications
+
+## Advanced push notifications formats
 
 ### Using an alert dictionary for complex payloads
 ```go
@@ -144,80 +151,3 @@ func main() {
 }
 ```
 
-### Sending a notification
-```go
-package main
-
-import (
-  "fmt"
-  apns "github.com/anachronistic/apns"
-)
-
-func main() {
-  payload := apns.NewPayload()
-  payload.Alert = "Hello, world!"
-  payload.Badge = 42
-  payload.Sound = "bingbong.aiff"
-
-  pn := apns.NewPushNotification()
-  pn.DeviceToken = "YOUR_DEVICE_TOKEN_HERE"
-  pn.AddPayload(payload)
-
-  client := apns.NewClient("gateway.sandbox.push.apple.com:2195", "YOUR_CERT_PEM", "YOUR_KEY_NOENC_PEM")
-  resp := client.Send(pn)
-
-  alert, _ := pn.PayloadString()
-  fmt.Println("  Alert:", alert)
-  fmt.Println("Success:", resp.Success)
-  fmt.Println("  Error:", resp.Error)
-}
-```
-
-#### Returns
-```shell
-  Alert: {"aps":{"alert":"Hello, world!","badge":42,"sound":"bingbong.aiff"}}
-Success: true
-  Error: <nil>
-```
-
-### Checking the feedback service
-```go
-package main
-
-import (
-  "fmt"
-  apns "github.com/anachronistic/apns"
-  "os"
-)
-
-func main() {
-  fmt.Println("- connecting to check for deactivated tokens (maximum read timeout =", apns.FeedbackTimeoutSeconds, "seconds)")
-
-  client := apns.NewClient("feedback.sandbox.push.apple.com:2196", "YOUR_CERT_PEM", "YOUR_KEY_NOENC_PEM")
-  go client.ListenForFeedback()
-
-  for {
-    select {
-    case resp := <-apns.FeedbackChannel:
-      fmt.Println("- recv'd:", resp.DeviceToken)
-    case <-apns.ShutdownChannel:
-      fmt.Println("- nothing returned from the feedback service")
-      os.Exit(1)
-    }
-  }
-}
-```
-
-#### Returns
-```shell
-- connecting to check for deactivated tokens (maximum read timeout = 5 seconds)
-- nothing returned from the feedback service
-exit status 1
-```
-
-Your output will differ if the service returns device tokens.
-
-```shell
-- recv'd: DEVICE_TOKEN_HERE
-...etc.
-```
