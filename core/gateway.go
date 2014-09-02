@@ -166,9 +166,6 @@ func lookupGateway(gateway string) (gatewayIPs, error) {
 	if len(gatewayParts) == 2 {
 		gateway = gatewayParts[0]
 	}
-	if gateway != gatewayName && gateway != gatewaySandboxName {
-		return nil, errors.New("Invalid gateway name")
-	}
 	ips, err := net.LookupIP(gateway)
 	if err != nil {
 		return nil, err
