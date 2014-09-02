@@ -154,7 +154,6 @@ func (g *Gateway) balanceGatewayIps() string {
 	if bestip != "" {
 		g.gips.ipMap[bestip] = g.gips.ipMap[bestip] + 1
 	}
-	log.Println("Best IP is ", bestip)
 	return bestip
 }
 
