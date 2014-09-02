@@ -55,12 +55,12 @@ func send(body []byte) {
 	defer ch.Close()
 
 	q, err := ch.QueueDeclare(
-		"hello", // name
-		true,    // durable
-		false,   // delete when usused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
+		"pushnotif", // name
+		true,        // durable
+		false,       // delete when usused
+		false,       // exclusive
+		false,       // no-wait
+		nil,         // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 

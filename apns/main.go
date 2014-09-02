@@ -82,12 +82,12 @@ func initRabbitMQ() (*amqp.Connection, *amqp.Channel, <-chan amqp.Delivery, erro
 	failOnError(err, "Failed to open a channel")
 
 	q, err := ch.QueueDeclare(
-		"hello", // name
-		true,    // durable
-		false,   // delete when usused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
+		"pushnotif", // name
+		true,        // durable
+		false,       // delete when usused
+		false,       // exclusive
+		false,       // no-wait
+		nil,         // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 
