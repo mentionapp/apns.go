@@ -33,7 +33,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to encode the push notification: %s", err)
 	}
-	log.Println(body)
 	send(body)
 }
 
