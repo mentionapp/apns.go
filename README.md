@@ -2,7 +2,7 @@
 
 Utilities for Apple Push Notification and Feedback Services.
 
-[![GoDoc](https://godoc.org/github.com/gsempe/apns?status.png)](https://godoc.org/github.com/gsempe/apns)
+[![GoDoc](https://godoc.org/github.com/gsempe/apns/core?status.png)](https://godoc.org/github.com/gsempe/apns/core)
 
 ## Installation
 
