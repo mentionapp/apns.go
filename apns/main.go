@@ -44,10 +44,12 @@ func init() {
 
 func main() {
 
-	msgs, err := initRabbitMQ()
+	conn, ch, msgs, err := initRabbitMQ()
 	if err != nil {
 		panic(err)
 	}
+	defer conn.Close()
+	defer ch.Close()
 
 	ctx, _ := context.WithCancel(context.Background())
 	gw, err := apns.NewGateway(ctx, *certFile, *keyFile)
@@ -58,40 +60,19 @@ func main() {
 
 	runningId := uint32(0)
 
-	// for {
-	// 	select {
-	// 	case d := <-msgs:
-	// 		log.Printf("Received a message: %s", d.Body)
-	// 		pn := MsgPushNotification{}
-	// 		err := json.Unmarshal(d.Body, &pn)
-	// 		if err != nil {
-	// 			log.Printf("Failed to decode msg %v", err)
-	// 			time.Sleep(time.Second * 3)
-	// 			continue
-	// 		}
-	// 		runningId++
-	// 		log.Printf("send push notif with text `%s` to token: `%s`", pn.Text, pn.Token)
-	// 		gw.Send(createPushNotification(runningId, pn.Text, pn.Token))
-	// 	}
-	// }
-
 	for d := range msgs {
-		log.Printf("Received a message: %s", d.Body)
 		pn := MsgPushNotification{}
 		err := json.Unmarshal(d.Body, &pn)
 		if err != nil {
-			log.Printf("Failed to decode msg %v", err)
-			time.Sleep(time.Second * 3)
 			continue
 		}
 		runningId++
-		log.Printf("send push notif with text `%s` to token: `%s`", pn.Text, pn.Token)
 		gw.Send(createPushNotification(runningId, pn.Text, pn.Token))
 	}
 }
 
 // initRabbitMQ initialize the queue to communicate with the cli
-func initRabbitMQ() (<-chan amqp.Delivery, error) {
+func initRabbitMQ() (*amqp.Connection, *amqp.Channel, <-chan amqp.Delivery, error) {
 
 	failOnError := func(err error, msg string) {
 		if err != nil {
@@ -102,11 +83,9 @@ func initRabbitMQ() (<-chan amqp.Delivery, error) {
 
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
 
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
 
 	q, err := ch.QueueDeclare(
 		"hello", // name
@@ -132,5 +111,5 @@ func initRabbitMQ() (<-chan amqp.Delivery, error) {
 	if msgs == nil {
 		log.Println("chan msgs is nil")
 	}
-	return msgs, err
+	return conn, ch, msgs, err
 }
