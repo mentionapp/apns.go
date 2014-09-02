@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"time"
 
 	"code.google.com/p/go.net/context"
 	"github.com/gsempe/apns/core"
@@ -17,20 +16,6 @@ import (
 type MsgPushNotification struct {
 	Text  string `json:"text"`
 	Token string `json:"token"`
-}
-
-func createPushNotification(identifier uint32, text, deviceToken string) *apns.PushNotification {
-
-	payload := apns.NewPayload()
-	payload.Alert = text
-	payload.Badge = 42
-	payload.Sound = "bingbong.aiff"
-
-	pn := apns.NewPushNotification()
-	pn.DeviceToken = deviceToken
-	pn.Identifier = identifier
-	pn.AddPayload(payload)
-	return pn
 }
 
 var (
@@ -58,16 +43,25 @@ func main() {
 		panic(err)
 	}
 
-	runningId := uint32(0)
+	runningIdentifier := uint32(0)
 
 	for d := range msgs {
-		pn := MsgPushNotification{}
-		err := json.Unmarshal(d.Body, &pn)
+		msg := MsgPushNotification{}
+		err := json.Unmarshal(d.Body, &msg)
 		if err != nil {
 			continue
 		}
-		runningId++
-		gw.Send(createPushNotification(runningId, pn.Text, pn.Token))
+		runningIdentifier++
+
+		payload := apns.NewPayload()
+		payload.Alert = msg.Text
+		payload.Badge = int(runningIdentifier)
+		pn := apns.NewPushNotification()
+		pn.DeviceToken = msg.Token
+		pn.Identifier = runningIdentifier
+		pn.AddPayload(payload)
+
+		gw.Send(pn)
 	}
 }
 
