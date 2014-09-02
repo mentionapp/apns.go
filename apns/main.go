@@ -19,6 +19,7 @@ type MsgPushNotification struct {
 }
 
 var (
+	sandbox  = flag.Bool("sandbox", false, "Use this flag to communicate with the sandbox and not the production")
 	certFile = flag.String("cert", "apns-cert.pem", "The certificate file")
 	keyFile  = flag.String("key", "apns-key.pem", "The key file")
 )
@@ -29,6 +30,10 @@ func init() {
 
 func main() {
 
+	var (
+		gw  *apns.Gateway
+		err error
+	)
 	conn, ch, msgs, err := initRabbitMQ()
 	if err != nil {
 		panic(err)
@@ -37,7 +42,11 @@ func main() {
 	defer ch.Close()
 
 	ctx, _ := context.WithCancel(context.Background())
-	gw, err := apns.NewGateway(ctx, *certFile, *keyFile)
+	if *sandbox {
+		gw, err = apns.NewSandboxGateway(ctx, *certFile, *keyFile)
+	} else {
+		gw, err = apns.NewGateway(ctx, *certFile, *keyFile)
+	}
 	if err != nil {
 		log.Fatalf("Failed to connect to gateway: %s", err)
 		panic(err)
