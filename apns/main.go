@@ -43,6 +43,10 @@ func main() {
 		panic(err)
 	}
 
+	gw.Errors(func(pnr *apns.PushNotificationResponse) {
+		log.Printf("Unable to send push notification with Id %d", pnr.Identifier)
+	})
+
 	runningIdentifier := uint32(0)
 
 	for d := range msgs {
