@@ -2,7 +2,6 @@ package apns
 
 import (
 	"errors"
-	"log"
 	"math"
 	"math/rand"
 	"net"
