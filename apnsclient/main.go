@@ -53,7 +53,7 @@ func main() {
 	}
 
 	gw.Errors(func(pnr *apns.PushNotificationResponse) {
-		log.Printf("Unable to send push notification with Id %d", pnr.Identifier)
+		log.Printf("Unable to send push notification with ID %d, error %s", pnr.Identifier, pnr.Error)
 	})
 
 	runningIdentifier := uint32(0)
