@@ -64,6 +64,11 @@ var ApplePushResponseDescriptions = map[uint8]string{
 	UnknownErrorStatus:            "UNKNOWN",
 }
 
+var LocalResponseDescriptions = map[uint8]string{
+	RetryPushNotificationStatus:    "LOCAL_ERROR_RETRY",
+	CanceledPushNotificationStatus: "LOCAL_ERROR_CANCEL",
+}
+
 // PushNotificationResponse details what Apple had to say, if anything.
 type PushNotificationResponse struct {
 	Identifier      uint32
@@ -82,18 +87,22 @@ func NewPushNotificationResponse(pn *PushNotification) *PushNotificationResponse
 
 func (pnr *PushNotificationResponse) FromRawAppleResponse(r []byte) {
 
-	pnr.AppleResponse = ApplePushResponseDescriptions[r[1]]
-
 	if r[1] == NoErrorsStatus { // No error, so timeout
+		pnr.AppleResponse = ApplePushResponseDescriptions[NoErrorsStatus]
 		pnr.Success = true
 		pnr.Error = nil
 	} else {
 		pnr.Success = false
-		pnr.Error = errors.New(pnr.AppleResponse)
-
 		pnr.ResponseCommand = PushResponseCommand(r[0])
 		pnr.ResponseStatus = ApplePushResponseStatus(r[1])
 		binary.Read(bytes.NewBuffer(r[2:]), binary.BigEndian, &(pnr.Identifier))
+
+		if pnr.ResponseCommand == AppleResponseCommand {
+			pnr.AppleResponse = ApplePushResponseDescriptions[uint8(pnr.ResponseStatus)]
+		} else {
+			pnr.AppleResponse = LocalResponseDescriptions[uint8(pnr.ResponseStatus)]
+		}
+		pnr.Error = errors.New(pnr.AppleResponse)
 	}
 
 }
