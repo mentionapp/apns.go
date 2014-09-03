@@ -56,6 +56,8 @@ func main() {
 
 #### Running apnsclient and apnscli binaries
 
+Note: `apnsclient` and `apnscli` use a local RabbitMQ server to communicate. Install it to get them work: [RabbitMQ](http://www.rabbitmq.com/)
+
 Open a terminal, go to the apnsclient directory, get the binary dependencies and build it
 ```
 $ cd $GOPATH/src/github.com/gsempe/apns/apnsclient
