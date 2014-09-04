@@ -128,8 +128,8 @@ func (c *PersistentClient) Send(ctx context.Context, pn *PushNotification) *Push
 	go func() {
 		c.conn.SetReadDeadline(time.Now().Add(time.Second * TimeoutSeconds))
 		buffer := make([]byte, 6)
-		_, err := c.conn.Read(buffer)
-		if err != nil {
+		n, err := c.conn.Read(buffer)
+		if n != 6 && err != nil {
 			buffer[0] = LocalResponseCommand
 			e, ok := err.(net.Error)
 			switch {
