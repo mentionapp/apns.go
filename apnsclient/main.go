@@ -61,6 +61,7 @@ func main() {
 		msg := MsgPushNotification{}
 		err := json.Unmarshal(d.Body, &msg)
 		if err != nil {
+			log.Printf("Unmarshal apns-cli message error, %s", err)
 			continue
 		}
 		runningIdentifier++
