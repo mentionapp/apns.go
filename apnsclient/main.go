@@ -49,7 +49,6 @@ func main() {
 	}
 	if err != nil {
 		log.Fatalf("Failed to connect to gateway: %s", err)
-		panic(err)
 	}
 
 	gw.Errors(func(pnr *apns.PushNotificationResponse) {
