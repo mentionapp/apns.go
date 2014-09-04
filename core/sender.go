@@ -50,24 +50,23 @@ func (s *Sender) Send(pn *PushNotification) {
 // senderJob does the loop connection, send push notifications, manage errors
 func (s *Sender) senderJob(ctx context.Context) {
 
-	cnxc := make(chan struct{}) // Chan to manage re-connections
 	for {
 		err := s.client.Connect() // Reconnect to APNs if needed
 		if err != nil {
 			log.Println("Connection to APNs error ", err)
-			// Connection failed so we have to retry it later
-			go func() {
-				// TODO GSE : Improve the reconnection managment
-				time.Sleep(time.Second * 5)
-				cnxc <- struct{}{}
-			}()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(time.Second * 1) // arbitrary time to wait for retry connection
+			}
+			continue
 		}
+		// A connection is established
 		select {
 		case <-ctx.Done():
 			s.client.Close()
 			return
-		case <-cnxc:
-			// Let the for loop retry the connexion
 		case <-s.pnc:
 			for {
 				pn := s.waitingQueue.head()

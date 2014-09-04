@@ -2,10 +2,12 @@ package apns
 
 import (
 	"crypto/tls"
+	"errors"
 	"io"
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"code.google.com/p/go.net/context"
@@ -24,6 +26,9 @@ type PersistentClient struct {
 	client *client
 	conn   net.Conn
 	ip     string
+
+	mu          sync.Mutex
+	isConnected bool
 }
 
 // NewPersistentClient creates a new persistent connection to the APNs servers
@@ -44,7 +49,7 @@ func NewPersistentClient(gateway, ip, certificateFile, keyFile string) (*Persist
 func (c *PersistentClient) Connect() error {
 
 	// Check if there is already a connection
-	if c.conn != nil {
+	if c.isConnected == true {
 		// If connection is not nil it should be ok
 		// c.conn is set to nil when there is an error on read or write
 		// because the gateway close it anyway in this case
@@ -60,8 +65,8 @@ func (c *PersistentClient) Reconnect() error {
 	var cert tls.Certificate
 	var err error
 
-	if c.conn != nil {
-		c.closeAndNil()
+	if c.isConnected == true {
+		c.Close()
 	}
 
 	if len(c.client.certificateBase64) == 0 && len(c.client.keyBase64) == 0 {
@@ -96,7 +101,10 @@ func (c *PersistentClient) Reconnect() error {
 		conn.Close()
 		return err
 	}
+	c.mu.Lock()
 	c.conn = net.Conn(tlsConn)
+	c.isConnected = true
+	c.mu.Unlock()
 	log.Printf("Address of %s is %s", c.client.gateway, c.conn.RemoteAddr().String())
 	return nil
 }
@@ -112,7 +120,7 @@ func (c *PersistentClient) Send(ctx context.Context, pn *PushNotification) *Push
 		return resp
 	}
 
-	_, err = c.conn.Write(payload)
+	_, err = c.Write(payload)
 	if err != nil {
 		resp.Success = false
 		resp.ResponseCommand = LocalResponseCommand
@@ -126,9 +134,8 @@ func (c *PersistentClient) Send(ctx context.Context, pn *PushNotification) *Push
 	// from Apple in the event of a failure.
 	responseChannel := make(chan []byte, 1)
 	go func() {
-		c.conn.SetReadDeadline(time.Now().Add(time.Second * TimeoutSeconds))
 		buffer := make([]byte, 6)
-		n, err := c.conn.Read(buffer)
+		n, err := c.Read(buffer)
 		if n != 6 && err != nil {
 			buffer[0] = LocalResponseCommand
 			e, ok := err.(net.Error)
@@ -159,13 +166,31 @@ func (c *PersistentClient) Send(ctx context.Context, pn *PushNotification) *Push
 
 // Close closes the persistent client
 func (c *PersistentClient) Close() {
-	c.closeAndNil()
+	c.closeAndSetDisconnected()
 }
 
-// closeAndNil closes a persistent connection and set the conn to nil
-func (c *PersistentClient) closeAndNil() {
-	// Used to not forget to nil the connection
+// closeAndSetDisconnected closes a persistent connection and set the isConnected flag to false
+func (c *PersistentClient) closeAndSetDisconnected() {
 	log.Printf("Closing %s at address %s", c.client.gateway, c.conn.RemoteAddr().String())
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.conn.Close()
-	c.conn = nil
+	c.isConnected = false
+}
+
+func (c *PersistentClient) Write(b []byte) (n int, err error) {
+
+	if !c.isConnected {
+		return 0, errors.New("persistentclient: write to closed conn")
+	}
+	return c.conn.Write(b)
+}
+
+func (c *PersistentClient) Read(b []byte) (n int, err error) {
+
+	if !c.isConnected {
+		return 0, errors.New("persistentclient: read to closed conn")
+	}
+	c.conn.SetReadDeadline(time.Now().Add(time.Second * TimeoutSeconds))
+	return c.conn.Read(b)
 }
