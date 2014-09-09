@@ -51,8 +51,9 @@ func main() {
 		log.Fatalf("Failed to connect to gateway: %s", err)
 	}
 
-	gw.Errors(func(pnr *apns.PushNotificationResponse) {
-		log.Printf("Unable to send push notification with ID %d, error %s", pnr.Identifier, pnr.Error)
+	gw.Errors(func(pn *apns.PushNotification, pnr *apns.PushNotificationResponse) {
+		log.Printf("Unable to send push notification with Id %d, error %s", pnr.Identifier, pnr.Error)
+		log.Printf("Id %d, token %s", pn.Identifier, pn.DeviceToken)
 	})
 
 	runningIdentifier := uint32(0)

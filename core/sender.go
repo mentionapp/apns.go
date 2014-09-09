@@ -9,12 +9,12 @@ import (
 
 // Sender is informations needed to send push notifications to the APNs
 type Sender struct {
-	client       *PersistentClient              // The client that sends push notifications to the APNs
-	waitingQueue pushNotificationQueue          // Queue of push notification waiting for to be sent
-	sendingQueue pushNotificationQueue          // Queue of push notification currently in the sending state
-	pnc          chan *PushNotification         // Push Notification Channel
-	pnrc         chan *PushNotificationResponse // Push Notification Response Channel
-	pnrec        chan *PushNotificationResponse // Push Notification Response Error Channel: the channel to send error back to the `gateway`
+	client       *PersistentClient                     // The client that sends push notifications to the APNs
+	waitingQueue pushNotificationQueue                 // Queue of push notification waiting for to be sent
+	sendingQueue pushNotificationQueue                 // Queue of push notification currently in the sending state
+	pnc          chan *PushNotification                // Push Notification Channel
+	pnrc         chan *PushNotificationResponse        // Push Notification Response Channel
+	pnrec        chan *pushNotificationRequestResponse // Push Notification Error Channel (request/response): the channel to send error back to the `gateway`
 }
 
 // NewSender creates a sender.
@@ -96,26 +96,26 @@ func (s *Sender) senderJob(ctx context.Context) {
 			} else {
 				log.Println("Push notification with ID ", pnr.Identifier, " has an error ", pnr.Error)
 				s.client.Close()
-				var pnhead *PushNotification
+				var pn *PushNotification
 				for {
-					pnhead = s.sendingQueue.head()
-					if pnhead == nil {
+					pn = s.sendingQueue.head()
+					if pn == nil {
 						break
 					}
-					if pnhead.Identifier == pnr.Identifier {
+					if pn.Identifier == pnr.Identifier {
 						break
 					}
 				}
-				if pnhead != nil {
+				if pn != nil {
 					if pnr.ResponseCommand == LocalResponseCommand && pnr.ResponseStatus == RetryPushNotificationStatus { // retry to send the push notification
-						log.Println("Requeue the Push notification with ID ", pnhead.Identifier)
-						go s.Send(pnhead)
+						log.Println("Requeue the Push notification with ID ", pn.Identifier)
+						go s.Send(pn)
 					} else {
 						if s.pnrec != nil {
 							go func() {
 								select {
 								case <-ctx.Done(): // In case of the race condition: `s.pnrec` was not nil and it is now nil: It must be because the gateway has been canceled
-								case s.pnrec <- pnr:
+								case s.pnrec <- &pushNotificationRequestResponse{pn: pn, pnr: pnr}:
 								}
 							}()
 						}

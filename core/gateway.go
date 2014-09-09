@@ -36,15 +36,20 @@ type ips struct {
 
 // Gateway keeps all the informations needed to communicate with the APNs
 type Gateway struct {
-	gateway   string                         // The gateway name could be either `gatewayName`, `gatewaySandboxName` or a custom host:port
-	gips      ips                            // save the balance of used IPs for the `gateway`
-	responses chan *PushNotificationResponse // Channel of errors, directly from senders
-	onError   OnErrorCallback                // Error callback to execute client code on error
-	senders   []*Sender                      // Array of potential senders
+	gateway string                                // The gateway name could be either `gatewayName`, `gatewaySandboxName` or a custom host:port
+	gips    ips                                   // save the balance of used IPs for the `gateway`
+	errors  chan *pushNotificationRequestResponse // Channel of errors (request/response), directly from senders
+	onError OnErrorCallback                       // Error callback to execute client code on error
+	senders []*Sender                             // Array of potential senders
+}
+
+type pushNotificationRequestResponse struct {
+	pn  *PushNotification
+	pnr *PushNotificationResponse
 }
 
 // OnErrorCallback functions are called to let the library client react when an error occured
-type OnErrorCallback func(*PushNotificationResponse)
+type OnErrorCallback func(*PushNotification, *PushNotificationResponse)
 
 func init() {
 	// Initialize at startup the rand seed
@@ -101,7 +106,7 @@ func (g *Gateway) newGateway(ctx context.Context, certificateFile, keyFile strin
 		ipMap[ip] = 0
 	}
 	g.gips = ips{ipMap: ipMap}
-	g.responses = make(chan *PushNotificationResponse)
+	g.errors = make(chan *pushNotificationRequestResponse)
 	g.senders = []*Sender{}
 	// TODO GSE: Enable the possibilty to choose the number of senders
 	err = g.newSender(ctx, certificateFile, keyFile)
@@ -113,9 +118,9 @@ func (g *Gateway) newGateway(ctx context.Context, certificateFile, keyFile strin
 			select {
 			case <-ctx.Done():
 				return
-			case pnr := <-g.responses:
+			case pnrr := <-g.errors:
 				if g.onError != nil {
-					go g.onError(pnr)
+					go g.onError(pnrr.pn, pnrr.pnr)
 				}
 			}
 		}
@@ -131,7 +136,7 @@ func (g *Gateway) newSender(ctx context.Context, certificateFile, keyFile string
 	if err != nil {
 		return err
 	}
-	s.pnrec = g.responses
+	s.pnrec = g.errors
 	g.senders = append(g.senders, s)
 	return nil
 }
