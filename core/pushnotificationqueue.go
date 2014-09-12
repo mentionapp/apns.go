@@ -9,7 +9,7 @@ type pushNotificationQueue struct {
 	queue []*PushNotification
 }
 
-func NewQueue() pushNotificationQueue {
+func NewPNQueue() pushNotificationQueue {
 	return pushNotificationQueue{queue: []*PushNotification{}}
 }
 

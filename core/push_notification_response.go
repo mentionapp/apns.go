@@ -87,22 +87,15 @@ func NewPushNotificationResponse(pn *PushNotification) *PushNotificationResponse
 
 func (pnr *PushNotificationResponse) FromRawAppleResponse(r []byte) {
 
-	if r[1] == NoErrorsStatus { // No error, so timeout
-		pnr.AppleResponse = ApplePushResponseDescriptions[NoErrorsStatus]
-		pnr.Success = true
-		pnr.Error = nil
+	pnr.Success = false
+	pnr.ResponseCommand = PushResponseCommand(r[0])
+	pnr.ResponseStatus = ApplePushResponseStatus(r[1])
+	binary.Read(bytes.NewBuffer(r[2:]), binary.BigEndian, &(pnr.Identifier))
+
+	if pnr.ResponseCommand == AppleResponseCommand {
+		pnr.AppleResponse = ApplePushResponseDescriptions[uint8(pnr.ResponseStatus)]
 	} else {
-		pnr.Success = false
-		pnr.ResponseCommand = PushResponseCommand(r[0])
-		pnr.ResponseStatus = ApplePushResponseStatus(r[1])
-		binary.Read(bytes.NewBuffer(r[2:]), binary.BigEndian, &(pnr.Identifier))
-
-		if pnr.ResponseCommand == AppleResponseCommand {
-			pnr.AppleResponse = ApplePushResponseDescriptions[uint8(pnr.ResponseStatus)]
-		} else {
-			pnr.AppleResponse = LocalResponseDescriptions[uint8(pnr.ResponseStatus)]
-		}
-		pnr.Error = errors.New(pnr.AppleResponse)
+		pnr.AppleResponse = LocalResponseDescriptions[uint8(pnr.ResponseStatus)]
 	}
-
+	pnr.Error = errors.New(pnr.AppleResponse)
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 )
@@ -129,7 +130,7 @@ func (pn *PushNotification) PayloadString() (string, error) {
 func (pn *PushNotification) ToBytes() ([]byte, error) {
 	token, err := hex.DecodeString(pn.DeviceToken)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed decoding device token %q: %v", pn.DeviceToken, err)
 	}
 	payload, err := pn.PayloadJSON()
 	if err != nil {

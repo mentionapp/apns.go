@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"crypto/tls"
+
 	"code.google.com/p/go.net/context"
 )
 
@@ -38,14 +40,14 @@ type ips struct {
 type Gateway struct {
 	gateway string                                // The gateway name could be either `gatewayName`, `gatewaySandboxName` or a custom host:port
 	gips    ips                                   // save the balance of used IPs for the `gateway`
-	errors  chan *pushNotificationRequestResponse // Channel of errors (request/response), directly from senders
+	errors  chan *PushNotificationRequestResponse // Channel of errors (request/response), directly from senders
 	onError OnErrorCallback                       // Error callback to execute client code on error
 	senders []*Sender                             // Array of potential senders
 }
 
-type pushNotificationRequestResponse struct {
-	pn  *PushNotification
-	pnr *PushNotificationResponse
+type PushNotificationRequestResponse struct {
+	Notification *PushNotification
+	Response     *PushNotificationResponse
 }
 
 // OnErrorCallback functions are called to let the library client react when an error occured
@@ -84,7 +86,7 @@ func (g *Gateway) Send(pn *PushNotification) {
 	min := 0
 	max := len(g.senders)
 	n := rand.Intn(max-min) + min
-	g.senders[n].Send(pn)
+	g.senders[n].Notifications() <- pn
 }
 
 // Errors gives feedback to the library client on which push notifications got errors
@@ -106,7 +108,7 @@ func (g *Gateway) newGateway(ctx context.Context, certificateFile, keyFile strin
 		ipMap[ip] = 0
 	}
 	g.gips = ips{ipMap: ipMap}
-	g.errors = make(chan *pushNotificationRequestResponse)
+	g.errors = make(chan *PushNotificationRequestResponse)
 	g.senders = []*Sender{}
 	// TODO GSE: Enable the possibilty to choose the number of senders
 	err = g.newSender(ctx, certificateFile, keyFile)
@@ -120,7 +122,7 @@ func (g *Gateway) newGateway(ctx context.Context, certificateFile, keyFile strin
 				return
 			case pnrr := <-g.errors:
 				if g.onError != nil {
-					go g.onError(pnrr.pn, pnrr.pnr)
+					go g.onError(pnrr.Notification, pnrr.Response)
 				}
 			}
 		}
@@ -131,12 +133,14 @@ func (g *Gateway) newGateway(ctx context.Context, certificateFile, keyFile strin
 // newSender creates a sender and attach it to the gateway
 func (g *Gateway) newSender(ctx context.Context, certificateFile, keyFile string) error {
 
-	ip := g.balanceGatewayIps()
-	s, err := NewSender(ctx, g.gateway, ip, certificateFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(certificateFile, keyFile)
 	if err != nil {
 		return err
 	}
-	s.pnrec = g.errors
+
+	s := NewSender(ctx, g.gateway, &cert)
+
+	s.pnrrc = g.errors
 	g.senders = append(g.senders, s)
 	return nil
 }

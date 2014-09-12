@@ -1,138 +1,167 @@
 package apns
 
 import (
+	"crypto/tls"
 	"log"
-	"time"
 
 	"code.google.com/p/go.net/context"
+	"github.com/cenkalti/backoff"
 )
 
-// Sender is informations needed to send push notifications to the APNs
+// Sender sends notifications
 type Sender struct {
-	client       *PersistentClient                     // The client that sends push notifications to the APNs
-	waitingQueue pushNotificationQueue                 // Queue of push notification waiting for to be sent
-	sendingQueue pushNotificationQueue                 // Queue of push notification currently in the sending state
-	pnc          chan *PushNotification                // Push Notification Channel
-	pnrc         chan *PushNotificationResponse        // Push Notification Response Channel
-	pnrec        chan *pushNotificationRequestResponse // Push Notification Error Channel (request/response): the channel to send error back to the `gateway`
+	addr  string
+	cert  *tls.Certificate
+	conn  *conn
+	pnc   chan *PushNotification
+	pnrrc chan *PushNotificationRequestResponse
+	err   chan *conn
 }
 
-// NewSender creates a sender.
-// It Manages the connection with the APNs, the waitingQueue of push notifications:
-// - requeue the push notifications with a temporary error
-// - report errors to the caller
-func NewSender(ctx context.Context, gateway, ip, certificateFile, keyFile string) (*Sender, error) {
-
-	c, err := NewPersistentClient(gateway, ip, certificateFile, keyFile)
-	if err != nil {
-		return nil, err
+// NewSender creates a new Sender
+func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender {
+	s := &Sender{
+		addr:  addr,
+		cert:  cert,
+		pnc:   make(chan *PushNotification),
+		pnrrc: make(chan *PushNotificationRequestResponse),
+		err:   make(chan *conn),
 	}
-	wq := NewQueue()
-	sq := NewQueue()
-	pnc := make(chan *PushNotification)
-	pnrc := make(chan *PushNotificationResponse)
-	s := &Sender{client: c, waitingQueue: wq, sendingQueue: sq, pnc: pnc, pnrc: pnrc}
-
-	go s.senderJob(ctx) // Launch the job: come on baby!
-	return s, nil
+	go s.senderJob(ctx)
+	return s
 }
 
-// Send enqueues a new push notification to the sender and initiate the sending of all the push notification already queued
-func (s *Sender) Send(pn *PushNotification) {
-
-	s.waitingQueue.enqueue(pn)
-	pnhead := s.waitingQueue.pick()
-	if pnhead != nil {
-		s.pnc <- pnhead
-	}
+// Notifications returns the channel to which to send notifications
+func (s *Sender) Notifications() chan *PushNotification {
+	return s.pnc
 }
 
-// senderJob does the loop connection, send push notifications, manage errors
+// Responses returns the channel from which responses should be received
+func (s *Sender) Responses() <-chan *PushNotificationRequestResponse {
+	return s.pnrrc
+}
+
 func (s *Sender) senderJob(ctx context.Context) {
 
-	for {
-		err := s.client.Connect() // Reconnect to APNs if needed
-		if err != nil {
-			log.Println("Connection to APNs error ", err)
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				time.Sleep(time.Second * 1) // arbitrary time to wait for retry connection
-			}
-			continue
+	handleErr := func(c *conn) {
+		log.Printf("Error occured on connection, closing")
+		s.conn.Close()
+		if c == s.conn {
+			s.conn = nil
 		}
-		// A connection is established
+	}
+
+	for {
+
+		select {
+		case c := <-s.err:
+			handleErr(c)
+		default:
+		}
+
 		select {
 		case <-ctx.Done():
-			s.client.Close()
+			if s.conn != nil {
+				s.conn.Close()
+			}
 			return
-		case <-s.pnc:
-			for {
-				pn := s.waitingQueue.head()
-				if pn == nil {
-					break
-				}
-				s.sendingQueue.enqueue(pn)
-				go func() {
-					resp := s.client.Send(ctx, pn)
-					s.pnrc <- resp
-				}()
-			}
+		case c := <-s.err:
+			handleErr(c)
+		case pn := <-s.pnc:
+			log.Printf("Sending notification %v", pn.Identifier)
+			s.doSend(pn)
+		}
+	}
+}
 
-		case pnr := <-s.pnrc:
-			// The push notification response is not identifiable: Abort
-			// It's a side effect of an error on another push notification and it is managed
-			// by requeueing in `workingQueue` the push notifications behind the push notification with an error
-			if pnr.Identifier == 0 {
-				continue
-			}
-			// A new response is arrived
-			// - it's a success: Forget about this push notification
-			// - it's an APNs error or another local error (not retry): Gives the information to the client and requeue the push notifications behind this one
-			if pnr.Success == true {
-				// TODO GSE: Here, should we remove all the push notification ahead this one?
-				s.sendingQueue.Remove(pnr.Identifier)
-			} else {
-				log.Println("Push notification with ID ", pnr.Identifier, " has an error ", pnr.Error)
-				s.client.Close()
-				var pn *PushNotification
-				for {
-					pn = s.sendingQueue.head()
-					if pn == nil {
-						break
-					}
-					if pn.Identifier == pnr.Identifier {
-						break
-					}
-				}
-				if pn != nil {
-					if pnr.ResponseCommand == LocalResponseCommand && pnr.ResponseStatus == RetryPushNotificationStatus { // retry to send the push notification
-						log.Println("Requeue the Push notification with ID ", pn.Identifier)
-						go s.Send(pn)
-					} else {
-						if s.pnrec != nil {
-							go func() {
-								select {
-								case <-ctx.Done(): // In case of the race condition: `s.pnrec` was not nil and it is now nil: It must be because the gateway has been canceled
-								case s.pnrec <- &pushNotificationRequestResponse{pn: pn, pnr: pnr}:
-								}
-							}()
-						}
-					}
-					for {
-						pn := s.sendingQueue.head()
-						if pn == nil {
-							break
-						} else {
-							log.Println("reschedule push notification with ID ", pn.Identifier)
-							go s.Send(pn)
-						}
-					}
-				}
+func (s *Sender) doSend(pn *PushNotification) {
 
+	for {
+
+		s.connect()
+
+		payload, err := pn.ToBytes()
+		if err != nil {
+			// FIXME: user feedback
+			log.Printf("Failed encoding notification %v: %v", pn.Identifier, err)
+			return
+		}
+
+		if _, err = s.conn.Write(payload); err != nil {
+			log.Printf("Failed sending notification %v: %v; will retry", pn.Identifier, err)
+			s.conn.Close()
+			s.conn = nil
+			continue
+		} else {
+			s.conn.queue.Add(pn)
+		}
+
+		return
+	}
+}
+
+func (s *Sender) connect() {
+
+	for s.conn == nil {
+		var conn *conn
+		var err error
+
+		connect := func() error {
+			log.Printf("Connecting to %v", s.addr)
+			conn, err = NewConn(s.addr, s.cert)
+			if err != nil {
+				log.Printf("Failed connecting to %v: %v; will retry", s.addr, err)
+				return err
+			}
+			return nil
+		}
+
+		if backoff.Retry(connect, backoff.NewExponentialBackOff()) != nil {
+			continue
+		}
+
+		go s.read(conn)
+
+		s.conn = conn
+	}
+}
+
+func (s *Sender) read(conn *conn) {
+	buffer := make([]byte, 6)
+	n, _ := conn.Read(buffer)
+
+	s.err <- conn
+
+	var pn *PushNotification
+	var all []*PushNotification
+
+	if n == len(buffer) {
+		resp := &PushNotificationResponse{}
+		resp.FromRawAppleResponse(buffer)
+
+		pn = conn.queue.Remove(resp.Identifier)
+
+		if pn == nil {
+			log.Printf("Got a response for unknown notification %v", resp.Identifier)
+		} else {
+			log.Printf("Got a response for notification %v", resp.Identifier)
+			s.pnrrc <- &PushNotificationRequestResponse{
+				Notification: pn,
+				Response:     resp,
 			}
 		}
 	}
-	return
+
+	if pn != nil {
+		all = conn.queue.GetAllAfter(pn.Identifier)
+	} else {
+		all = conn.queue.GetAll()
+	}
+
+	conn.queue.RemoveAll()
+
+	for _, pn := range all {
+		log.Printf("Requeuing notification %v", pn.Identifier)
+		s.pnc <- pn
+	}
 }
