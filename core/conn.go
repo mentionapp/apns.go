@@ -46,24 +46,14 @@ func NewConn(addr string, cert *tls.Certificate) (*conn, error) {
 		done:  make(chan struct{}),
 	}
 
-	go conn.expire()
-
 	return conn, nil
 }
 
 func (c *conn) Close() {
-	c.Conn.Close()
-	close(c.done)
-}
-
-func (c *conn) expire() {
-	ticker := time.Tick(time.Second)
-	for {
-		select {
-		case <-c.done:
-			break
-		case <-ticker:
-			c.queue.Expire()
-		}
+	select {
+	case <-c.done:
+	default:
+		c.Conn.Close()
+		close(c.done)
 	}
 }

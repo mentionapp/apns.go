@@ -3,6 +3,7 @@ package apns
 import (
 	"crypto/tls"
 	"log"
+	"time"
 
 	"code.google.com/p/go.net/context"
 	"github.com/cenkalti/backoff"
@@ -15,7 +16,13 @@ type Sender struct {
 	conn  *conn
 	pnc   chan *PushNotification
 	pnrrc chan *PushNotificationRequestResponse
-	err   chan *conn
+	readc chan *readEvent
+}
+
+type readEvent struct {
+	buffer []byte
+	n      int
+	conn   *conn
 }
 
 // NewSender creates a new Sender
@@ -25,7 +32,7 @@ func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender 
 		cert:  cert,
 		pnc:   make(chan *PushNotification),
 		pnrrc: make(chan *PushNotificationRequestResponse),
-		err:   make(chan *conn),
+		readc: make(chan *readEvent),
 	}
 	go s.senderJob(ctx)
 	return s
@@ -43,19 +50,13 @@ func (s *Sender) Responses() <-chan *PushNotificationRequestResponse {
 
 func (s *Sender) senderJob(ctx context.Context) {
 
-	handleErr := func(c *conn) {
-		log.Printf("Error occured on connection, closing")
-		s.conn.Close()
-		if c == s.conn {
-			s.conn = nil
-		}
-	}
+	ticker := time.Tick(time.Second)
 
 	for {
 
 		select {
-		case c := <-s.err:
-			handleErr(c)
+		case ev := <-s.readc:
+			s.handleRead(ev)
 		default:
 		}
 
@@ -65,13 +66,60 @@ func (s *Sender) senderJob(ctx context.Context) {
 				s.conn.Close()
 			}
 			return
-		case c := <-s.err:
-			handleErr(c)
+		case ev := <-s.readc:
+			s.handleRead(ev)
 		case pn := <-s.pnc:
 			log.Printf("Sending notification %v", pn.Identifier)
 			s.doSend(pn)
+		case <-ticker:
+			if s.conn != nil {
+				s.conn.queue.Expire()
+			}
 		}
 	}
+}
+
+func (s *Sender) handleRead(ev *readEvent) {
+
+	var pn *PushNotification
+	var all []*PushNotification
+
+	ev.conn.Close()
+	if ev.conn == s.conn {
+		s.conn = nil
+	}
+
+	if ev.n == len(ev.buffer) {
+		resp := &PushNotificationResponse{}
+		resp.FromRawAppleResponse(ev.buffer)
+
+		pn = ev.conn.queue.Get(resp.Identifier)
+
+		if pn == nil {
+			log.Printf("Got a response for unknown notification %v", resp.Identifier)
+		} else {
+			log.Printf("Got a response for notification %v", resp.Identifier)
+			s.pnrrc <- &PushNotificationRequestResponse{
+				Notification: pn,
+				Response:     resp,
+			}
+		}
+	}
+
+	if pn != nil {
+		all = ev.conn.queue.GetAllAfter(pn.Identifier)
+	} else {
+		all = ev.conn.queue.GetAll()
+	}
+
+	ev.conn.queue.RemoveAll()
+
+	go func() {
+		for _, pn := range all {
+			log.Printf("Requeuing notification %v", pn.Identifier)
+			s.pnc <- pn
+		}
+	}()
 }
 
 func (s *Sender) doSend(pn *PushNotification) {
@@ -127,41 +175,13 @@ func (s *Sender) connect() {
 }
 
 func (s *Sender) read(conn *conn) {
+
 	buffer := make([]byte, 6)
 	n, _ := conn.Read(buffer)
 
-	s.err <- conn
-
-	var pn *PushNotification
-	var all []*PushNotification
-
-	if n == len(buffer) {
-		resp := &PushNotificationResponse{}
-		resp.FromRawAppleResponse(buffer)
-
-		pn = conn.queue.Get(resp.Identifier)
-
-		if pn == nil {
-			log.Printf("Got a response for unknown notification %v", resp.Identifier)
-		} else {
-			log.Printf("Got a response for notification %v", resp.Identifier)
-			s.pnrrc <- &PushNotificationRequestResponse{
-				Notification: pn,
-				Response:     resp,
-			}
-		}
-	}
-
-	if pn != nil {
-		all = conn.queue.GetAllAfter(pn.Identifier)
-	} else {
-		all = conn.queue.GetAll()
-	}
-
-	conn.queue.RemoveAll()
-
-	for _, pn := range all {
-		log.Printf("Requeuing notification %v", pn.Identifier)
-		s.pnc <- pn
+	s.readc <- &readEvent{
+		buffer: buffer,
+		n:      n,
+		conn:   conn,
 	}
 }

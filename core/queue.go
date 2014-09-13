@@ -2,12 +2,10 @@ package apns
 
 import (
 	"container/list"
-	"sync"
 	"time"
 )
 
 type queue struct {
-	sync.Mutex
 	l        *list.List
 	m        map[uint32]*list.Element
 	duration time.Duration
@@ -21,22 +19,19 @@ type queueElem struct {
 // NewQueue creates a new queue
 func NewQueue(duration time.Duration) *queue {
 	return &queue{
-		l: list.New(),
-		m: make(map[uint32]*list.Element),
+		l:        list.New(),
+		m:        make(map[uint32]*list.Element),
+		duration: duration,
 	}
 }
 
 func (q *queue) Add(pn *PushNotification) {
-	q.Lock()
-	defer q.Unlock()
 
 	e := q.l.PushBack(&queueElem{pn, time.Now()})
 	q.m[pn.Identifier] = e
 }
 
 func (q *queue) Get(identifier uint32) *PushNotification {
-	q.Lock()
-	defer q.Unlock()
 
 	if e, ok := q.m[identifier]; ok {
 		return e.Value.(*queueElem).pn
@@ -51,8 +46,6 @@ func (q *queue) RemoveAll() {
 }
 
 func (q *queue) GetAllAfter(identifier uint32) []*PushNotification {
-	q.Lock()
-	defer q.Unlock()
 
 	var s []*PushNotification
 	var e *list.Element
@@ -72,8 +65,6 @@ func (q *queue) GetAllAfter(identifier uint32) []*PushNotification {
 }
 
 func (q *queue) GetAll() []*PushNotification {
-	q.Lock()
-	defer q.Unlock()
 
 	var s []*PushNotification
 
@@ -85,8 +76,6 @@ func (q *queue) GetAll() []*PushNotification {
 }
 
 func (q *queue) Expire() {
-	q.Lock()
-	defer q.Unlock()
 
 	now := time.Now()
 	for {
