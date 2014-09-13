@@ -16,8 +16,8 @@ type queueElem struct {
 	addedAt time.Time
 }
 
-// NewQueue creates a new queue
-func NewQueue(duration time.Duration) *queue {
+// newQueue creates a new queue
+func newQueue(duration time.Duration) *queue {
 	return &queue{
 		l:        list.New(),
 		m:        make(map[uint32]*list.Element),
@@ -38,11 +38,6 @@ func (q *queue) Get(identifier uint32) *PushNotification {
 	}
 
 	return nil
-}
-
-func (q *queue) RemoveAll() {
-	q.l = list.New()
-	q.m = make(map[uint32]*list.Element)
 }
 
 func (q *queue) GetAllAfter(identifier uint32) []*PushNotification {

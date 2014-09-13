@@ -2,6 +2,7 @@ package apns
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"time"
 
@@ -20,9 +21,8 @@ type Sender struct {
 }
 
 type readEvent struct {
-	buffer []byte
-	n      int
-	conn   *conn
+	resp *PushNotificationResponse
+	conn *conn
 }
 
 // NewSender creates a new Sender
@@ -53,13 +53,6 @@ func (s *Sender) senderJob(ctx context.Context) {
 	ticker := time.Tick(time.Second)
 
 	for {
-
-		select {
-		case ev := <-s.readc:
-			s.handleRead(ev)
-		default:
-		}
-
 		select {
 		case <-ctx.Done():
 			if s.conn != nil {
@@ -73,7 +66,7 @@ func (s *Sender) senderJob(ctx context.Context) {
 			s.doSend(pn)
 		case <-ticker:
 			if s.conn != nil {
-				s.conn.queue.Expire()
+				s.conn.Expire()
 			}
 		}
 	}
@@ -82,18 +75,16 @@ func (s *Sender) senderJob(ctx context.Context) {
 func (s *Sender) handleRead(ev *readEvent) {
 
 	var pn *PushNotification
-	var all []*PushNotification
+	var sent []*PushNotification
+	conn := ev.conn
 
-	ev.conn.Close()
-	if ev.conn == s.conn {
+	conn.Close()
+	if conn == s.conn {
 		s.conn = nil
 	}
 
-	if ev.n == len(ev.buffer) {
-		resp := &PushNotificationResponse{}
-		resp.FromRawAppleResponse(ev.buffer)
-
-		pn = ev.conn.queue.Get(resp.Identifier)
+	if resp := ev.resp; resp != nil {
+		pn = conn.GetSentNotification(resp.Identifier)
 
 		if pn == nil {
 			log.Printf("Got a response for unknown notification %v", resp.Identifier)
@@ -107,15 +98,13 @@ func (s *Sender) handleRead(ev *readEvent) {
 	}
 
 	if pn != nil {
-		all = ev.conn.queue.GetAllAfter(pn.Identifier)
+		sent = conn.GetSentNotificationsAfter(pn.Identifier)
 	} else {
-		all = ev.conn.queue.GetAll()
+		sent = conn.GetSentNotifications()
 	}
 
-	ev.conn.queue.RemoveAll()
-
 	go func() {
-		for _, pn := range all {
+		for _, pn := range sent {
 			log.Printf("Requeuing notification %v", pn.Identifier)
 			s.pnc <- pn
 		}
@@ -125,26 +114,19 @@ func (s *Sender) handleRead(ev *readEvent) {
 func (s *Sender) doSend(pn *PushNotification) {
 
 	for {
-
 		s.connect()
 
-		payload, err := pn.ToBytes()
-		if err != nil {
-			// FIXME: user feedback
-			log.Printf("Failed encoding notification %v: %v", pn.Identifier, err)
-			return
-		}
-
-		if _, err = s.conn.Write(payload); err != nil {
-			log.Printf("Failed sending notification %v: %v; will retry", pn.Identifier, err)
-			s.conn.Close()
-			s.conn = nil
-			continue
+		if connError, err := s.conn.Write(pn); err != nil {
+			if connError {
+				s.conn.Close()
+				s.conn = nil
+				fmt.Printf("%v; will retry", err)
+			} else {
+				fmt.Println(err)
+			}
 		} else {
-			s.conn.queue.Add(pn)
+			break
 		}
-
-		return
 	}
 }
 
@@ -156,7 +138,7 @@ func (s *Sender) connect() {
 
 		connect := func() error {
 			log.Printf("Connecting to %v", s.addr)
-			conn, err = NewConn(s.addr, s.cert)
+			conn, err = newConn(s.addr, s.cert)
 			if err != nil {
 				log.Printf("Failed connecting to %v: %v; will retry", s.addr, err)
 				return err
@@ -168,20 +150,21 @@ func (s *Sender) connect() {
 			continue
 		}
 
+		log.Printf("Connected to %v", s.addr)
+
 		go s.read(conn)
 
 		s.conn = conn
 	}
 }
 
-func (s *Sender) read(conn *conn) {
-
-	buffer := make([]byte, 6)
-	n, _ := conn.Read(buffer)
-
-	s.readc <- &readEvent{
-		buffer: buffer,
-		n:      n,
-		conn:   conn,
+func (s *Sender) read(c *conn) {
+	for {
+		select {
+		case <-c.Done():
+			return
+		case pnr := <-c.Read():
+			s.readc <- &readEvent{pnr, c}
+		}
 	}
 }
