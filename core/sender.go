@@ -139,7 +139,7 @@ func (s *Sender) read(conn *conn) {
 		resp := &PushNotificationResponse{}
 		resp.FromRawAppleResponse(buffer)
 
-		pn = conn.queue.Remove(resp.Identifier)
+		pn = conn.queue.Get(resp.Identifier)
 
 		if pn == nil {
 			log.Printf("Got a response for unknown notification %v", resp.Identifier)

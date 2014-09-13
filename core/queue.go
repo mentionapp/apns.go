@@ -34,33 +34,11 @@ func (q *queue) Add(pn *PushNotification) {
 	q.m[pn.Identifier] = e
 }
 
-func (q *queue) Expire() {
-	q.Lock()
-	defer q.Unlock()
-
-	now := time.Now()
-	for {
-		front := q.l.Front()
-		if front == nil {
-			break
-		}
-		elem := front.Value.(*queueElem)
-		if now.Sub(elem.addedAt) > q.duration {
-			q.l.Remove(front)
-			delete(q.m, elem.pn.Identifier)
-		} else {
-			break
-		}
-	}
-}
-
-func (q *queue) Remove(identifier uint32) *PushNotification {
+func (q *queue) Get(identifier uint32) *PushNotification {
 	q.Lock()
 	defer q.Unlock()
 
 	if e, ok := q.m[identifier]; ok {
-		q.l.Remove(e)
-		delete(q.m, identifier)
 		return e.Value.(*queueElem).pn
 	}
 
@@ -104,4 +82,24 @@ func (q *queue) GetAll() []*PushNotification {
 	}
 
 	return s
+}
+
+func (q *queue) Expire() {
+	q.Lock()
+	defer q.Unlock()
+
+	now := time.Now()
+	for {
+		front := q.l.Front()
+		if front == nil {
+			break
+		}
+		elem := front.Value.(*queueElem)
+		if now.Sub(elem.addedAt) > q.duration {
+			q.l.Remove(front)
+			delete(q.m, elem.pn.Identifier)
+		} else {
+			break
+		}
+	}
 }
