@@ -12,12 +12,13 @@ import (
 
 // Sender sends notifications
 type Sender struct {
-	addr  string
-	cert  *tls.Certificate
-	conn  *conn
-	pnc   chan *PushNotification
-	pnrrc chan *PushNotificationRequestResponse
-	readc chan *readEvent
+	addr       string
+	cert       *tls.Certificate
+	conn       *conn
+	notifc     chan *PushNotification
+	prioNotifc *priochan
+	respc      chan *PushNotificationRequestResponse
+	readc      chan *readEvent
 }
 
 type readEvent struct {
@@ -28,24 +29,29 @@ type readEvent struct {
 // NewSender creates a new Sender
 func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender {
 	s := &Sender{
-		addr:  addr,
-		cert:  cert,
-		pnc:   make(chan *PushNotification),
-		pnrrc: make(chan *PushNotificationRequestResponse),
-		readc: make(chan *readEvent),
+		addr:       addr,
+		cert:       cert,
+		notifc:     make(chan *PushNotification),
+		prioNotifc: newPriochan(),
+		respc:      make(chan *PushNotificationRequestResponse),
+		readc:      make(chan *readEvent),
 	}
+
+	s.prioNotifc.Add(s.notifc)
+
 	go s.senderJob(ctx)
+
 	return s
 }
 
 // Notifications returns the channel to which to send notifications
 func (s *Sender) Notifications() chan *PushNotification {
-	return s.pnc
+	return s.notifc
 }
 
 // Responses returns the channel from which responses should be received
 func (s *Sender) Responses() <-chan *PushNotificationRequestResponse {
-	return s.pnrrc
+	return s.respc
 }
 
 func (s *Sender) senderJob(ctx context.Context) {
@@ -58,10 +64,11 @@ func (s *Sender) senderJob(ctx context.Context) {
 			if s.conn != nil {
 				s.conn.Close()
 			}
+			s.prioNotifc.Close()
 			return
 		case ev := <-s.readc:
 			s.handleRead(ev)
-		case pn := <-s.pnc:
+		case pn := <-s.prioNotifc.Receive():
 			log.Printf("Sending notification %v", pn.Identifier)
 			s.doSend(pn)
 		case <-ticker:
@@ -90,7 +97,7 @@ func (s *Sender) handleRead(ev *readEvent) {
 			log.Printf("Got a response for unknown notification %v", resp.Identifier)
 		} else {
 			log.Printf("Got a response for notification %v", resp.Identifier)
-			s.pnrrc <- &PushNotificationRequestResponse{
+			s.respc <- &PushNotificationRequestResponse{
 				Notification: pn,
 				Response:     resp,
 			}
@@ -103,10 +110,14 @@ func (s *Sender) handleRead(ev *readEvent) {
 		sent = conn.GetSentNotifications()
 	}
 
+	// requeue notifications before anything sent to s.notifc
+	c := make(chan *PushNotification)
+	s.prioNotifc.Add(c)
+
 	go func() {
 		for _, pn := range sent {
 			log.Printf("Requeuing notification %v", pn.Identifier)
-			s.pnc <- pn
+			c <- pn
 		}
 	}()
 }

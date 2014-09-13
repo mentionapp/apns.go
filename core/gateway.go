@@ -140,7 +140,7 @@ func (g *Gateway) newSender(ctx context.Context, certificateFile, keyFile string
 
 	s := NewSender(ctx, g.gateway, &cert)
 
-	s.pnrrc = g.errors
+	s.respc = g.errors
 	g.senders = append(g.senders, s)
 	return nil
 }
