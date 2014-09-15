@@ -119,6 +119,7 @@ func (s *Sender) handleRead(ev *readEvent) {
 			log.Printf("Requeuing notification %v", pn.Identifier)
 			c <- pn
 		}
+		close(c)
 	}()
 }
 
