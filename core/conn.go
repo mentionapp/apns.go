@@ -61,8 +61,11 @@ func (c *conn) Write(pn *PushNotification) (connError bool, err error) {
 		return false, fmt.Errorf("Failed encoding notification %v: %v", pn.Identifier, err)
 	}
 
-	if _, err = c.conn.Write(payload); err != nil {
+	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
+	if n, err := c.conn.Write(payload); err != nil {
 		return true, fmt.Errorf("Failed sending notification %v: %v", pn.Identifier, err)
+	} else if n != len(payload) {
+		return true, fmt.Errorf("Failed sending notification %v: wrote %v bytes, expected %v", pn.Identifier, n, len(payload))
 	}
 
 	c.sent.Add(pn)
