@@ -29,8 +29,9 @@ func (m *priochan) Close() {
 func (m *priochan) read() {
 	var stack []chan *Notification
 	var current chan *Notification
+	var send func(e *Notification) bool
 
-	handleChan := func(c chan *Notification, ok bool) bool {
+	handleChan := func(c chan *Notification, ok bool) (stillOpened bool) {
 		if !ok {
 			return false
 		}
@@ -41,33 +42,42 @@ func (m *priochan) read() {
 		return true
 	}
 
-	for {
-		select {
-		case e, ok := <-current:
-			if ok {
-				sent := false
-				for !sent {
-					select {
-					case m.outc <- e:
-						sent = true
-					case c, ok := <-m.chanc:
-						if !handleChan(c, ok) {
-							return
-						}
+	receive := func() {
+		for {
+			select {
+			case e, ok := <-current:
+				if ok {
+					if !send(e) {
+						return
+					}
+				} else {
+					if len(stack) > 0 {
+						current = stack[len(stack)-1]
+						stack = stack[0 : len(stack)-1]
+					} else {
+						current = nil
 					}
 				}
-			} else {
-				if len(stack) > 0 {
-					current = stack[len(stack)-1]
-					stack = stack[0 : len(stack)-1]
-				} else {
-					current = nil
+			case c, ok := <-m.chanc:
+				if !handleChan(c, ok) {
+					return
 				}
-			}
-		case c, ok := <-m.chanc:
-			if !handleChan(c, ok) {
-				return
 			}
 		}
 	}
+
+	send = func(e *Notification) (stillOpened bool) {
+		for {
+			select {
+			case m.outc <- e:
+				return true
+			case c, ok := <-m.chanc:
+				if !handleChan(c, ok) {
+					return false
+				}
+			}
+		}
+	}
+
+	receive()
 }
