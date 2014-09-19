@@ -96,9 +96,14 @@ func (s *Sender) handleRead(ev *readEvent) {
 			log.Printf("Got a response for unknown notification %v", resp.Identifier)
 		} else {
 			log.Printf("Got a response for notification %v", resp.Identifier)
-			s.respc <- &PushNotificationRequestResponse{
-				Notification: pn,
-				Response:     resp,
+
+			// for ShutdownErrorStatus, the Identifier indicates the last
+			// notification that was successfully sent
+			if resp.Status != ShutdownErrorStatus {
+				s.respc <- &PushNotificationRequestResponse{
+					Notification: pn,
+					Response:     resp,
+				}
 			}
 		}
 	}
