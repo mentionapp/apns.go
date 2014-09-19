@@ -2,7 +2,6 @@ package apns
 
 import (
 	"crypto/tls"
-	"fmt"
 	"log"
 	"time"
 
@@ -132,9 +131,9 @@ func (s *Sender) doSend(pn *PushNotification) {
 			if connError {
 				s.conn.Close()
 				s.conn = nil
-				fmt.Printf("%v; will retry", err)
+				log.Printf("%v; will retry", err)
 			} else {
-				fmt.Println(err)
+				log.Println(err)
 			}
 		} else {
 			break
