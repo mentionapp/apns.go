@@ -22,6 +22,8 @@ func (m *priochan) Receive() <-chan *Notification {
 	return m.outc
 }
 
+// Close() closes the priochan. The Receive() channel is then closed once all
+// added chans have been consumed.
 func (m *priochan) Close() {
 	close(m.chanc)
 }
@@ -30,10 +32,13 @@ func (m *priochan) read() {
 	var stack []chan *Notification
 	var current chan *Notification
 	var send func(e *Notification) bool
+	var closed bool
 
 	handleChan := func(c chan *Notification, ok bool) (stillOpened bool) {
 		if !ok {
-			return false
+			closed = true
+			m.chanc = nil
+			return current != nil
 		}
 		if current != nil {
 			stack = append(stack, current)
@@ -54,6 +59,8 @@ func (m *priochan) read() {
 					if len(stack) > 0 {
 						current = stack[len(stack)-1]
 						stack = stack[0 : len(stack)-1]
+					} else if closed {
+						return
 					} else {
 						current = nil
 					}
@@ -80,4 +87,6 @@ func (m *priochan) read() {
 	}
 
 	receive()
+
+	close(m.outc)
 }
