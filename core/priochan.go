@@ -1,24 +1,24 @@
 package apns
 
 type priochan struct {
-	chanc chan chan *PushNotification
-	outc  chan *PushNotification
+	chanc chan chan *Notification
+	outc  chan *Notification
 }
 
 func newPriochan() *priochan {
 	m := &priochan{
-		chanc: make(chan chan *PushNotification),
-		outc:  make(chan *PushNotification),
+		chanc: make(chan chan *Notification),
+		outc:  make(chan *Notification),
 	}
 	go m.read()
 	return m
 }
 
-func (m *priochan) Add(c chan *PushNotification) {
+func (m *priochan) Add(c chan *Notification) {
 	m.chanc <- c
 }
 
-func (m *priochan) Receive() <-chan *PushNotification {
+func (m *priochan) Receive() <-chan *Notification {
 	return m.outc
 }
 
@@ -27,10 +27,10 @@ func (m *priochan) Close() {
 }
 
 func (m *priochan) read() {
-	var stack []chan *PushNotification
-	var current chan *PushNotification
+	var stack []chan *Notification
+	var current chan *Notification
 
-	handleChan := func(c chan *PushNotification, ok bool) bool {
+	handleChan := func(c chan *Notification, ok bool) bool {
 		if !ok {
 			return false
 		}

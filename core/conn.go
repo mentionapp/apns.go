@@ -55,21 +55,21 @@ func newConn(addr string, cert *tls.Certificate) (*conn, error) {
 	return conn, nil
 }
 
-func (c *conn) Write(pn *PushNotification) (connError bool, err error) {
+func (c *conn) Write(n *Notification) (connError bool, err error) {
 
-	payload, err := pn.ToBytes()
+	payload, err := n.Encode()
 	if err != nil {
-		return false, fmt.Errorf("Failed encoding notification %v: %v", pn.Identifier, err)
+		return false, fmt.Errorf("Failed encoding notification %v: %v", n.Identifier(), err)
 	}
 
 	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
-	if n, err := c.conn.Write(payload); err != nil {
-		return true, fmt.Errorf("Failed sending notification %v: %v", pn.Identifier, err)
-	} else if n != len(payload) {
-		return true, fmt.Errorf("Failed sending notification %v: wrote %v bytes, expected %v", pn.Identifier, n, len(payload))
+	if l, err := c.conn.Write(payload); err != nil {
+		return true, fmt.Errorf("Failed sending notification %v: %v", n.Identifier(), err)
+	} else if l != len(payload) {
+		return true, fmt.Errorf("Failed sending notification %v: wrote %v bytes, expected %v", n.Identifier(), l, len(payload))
 	}
 
-	c.sent.Add(pn)
+	c.sent.Add(n)
 
 	return false, nil
 }
@@ -91,15 +91,15 @@ func (c *conn) Close() {
 	}
 }
 
-func (c *conn) GetSentNotification(identifier uint32) *PushNotification {
+func (c *conn) GetSentNotification(identifier NotificationIdentifier) *Notification {
 	return c.sent.Get(identifier)
 }
 
-func (c *conn) GetSentNotificationsAfter(identifier uint32) []*PushNotification {
+func (c *conn) GetSentNotificationsAfter(identifier NotificationIdentifier) []*Notification {
 	return c.sent.GetAllAfter(identifier)
 }
 
-func (c *conn) GetSentNotifications() []*PushNotification {
+func (c *conn) GetSentNotifications() []*Notification {
 	return c.sent.GetAll()
 }
 

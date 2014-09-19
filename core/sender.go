@@ -14,10 +14,15 @@ type Sender struct {
 	addr       string
 	cert       *tls.Certificate
 	conn       *conn
-	notifc     chan *PushNotification
+	notifc     chan *Notification
 	prioNotifc *priochan
-	respc      chan *PushNotificationRequestResponse
+	errorc     chan *ErrorFeedback
 	readc      chan *readEvent
+}
+
+type ErrorFeedback struct {
+	Notification  *Notification
+	ErrorResponse *ErrorResponse
 }
 
 type readEvent struct {
@@ -30,9 +35,9 @@ func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender 
 	s := &Sender{
 		addr:       addr,
 		cert:       cert,
-		notifc:     make(chan *PushNotification),
+		notifc:     make(chan *Notification),
 		prioNotifc: newPriochan(),
-		respc:      make(chan *PushNotificationRequestResponse),
+		errorc:     make(chan *ErrorFeedback),
 		readc:      make(chan *readEvent),
 	}
 
@@ -44,13 +49,13 @@ func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender 
 }
 
 // Notifications returns the channel to which to send notifications
-func (s *Sender) Notifications() chan *PushNotification {
+func (s *Sender) Notifications() chan *Notification {
 	return s.notifc
 }
 
-// Responses returns the channel from which responses should be received
-func (s *Sender) Responses() <-chan *PushNotificationRequestResponse {
-	return s.respc
+// ErrorFeedbacks returns the channel from which to receive ErrorFeedbacks
+func (s *Sender) ErrorFeedbacks() <-chan *ErrorFeedback {
+	return s.errorc
 }
 
 func (s *Sender) senderJob(ctx context.Context) {
@@ -67,9 +72,9 @@ func (s *Sender) senderJob(ctx context.Context) {
 			return
 		case ev := <-s.readc:
 			s.handleRead(ev)
-		case pn := <-s.prioNotifc.Receive():
-			log.Printf("Sending notification %v", pn.Identifier)
-			s.doSend(pn)
+		case n := <-s.prioNotifc.Receive():
+			log.Printf("Sending notification %v", n.Identifier)
+			s.doSend(n)
 		case <-ticker:
 			if s.conn != nil {
 				s.conn.Expire()
@@ -80,8 +85,8 @@ func (s *Sender) senderJob(ctx context.Context) {
 
 func (s *Sender) handleRead(ev *readEvent) {
 
-	var pn *PushNotification
-	var sent []*PushNotification
+	var n *Notification
+	var sent []*Notification
 	conn := ev.conn
 
 	conn.Close()
@@ -90,9 +95,9 @@ func (s *Sender) handleRead(ev *readEvent) {
 	}
 
 	if resp := ev.resp; resp != nil {
-		pn = conn.GetSentNotification(resp.Identifier)
+		n = conn.GetSentNotification(resp.Identifier)
 
-		if pn == nil {
+		if n == nil {
 			log.Printf("Got a response for unknown notification %v", resp.Identifier)
 		} else {
 			log.Printf("Got a response for notification %v", resp.Identifier)
@@ -100,39 +105,39 @@ func (s *Sender) handleRead(ev *readEvent) {
 			// for ShutdownErrorStatus, the Identifier indicates the last
 			// notification that was successfully sent
 			if resp.Status != ShutdownErrorStatus {
-				s.respc <- &PushNotificationRequestResponse{
-					Notification: pn,
-					Response:     resp,
+				s.errorc <- &ErrorFeedback{
+					Notification:  n,
+					ErrorResponse: resp,
 				}
 			}
 		}
 	}
 
-	if pn != nil {
-		sent = conn.GetSentNotificationsAfter(pn.Identifier)
+	if n != nil {
+		sent = conn.GetSentNotificationsAfter(n.Identifier())
 	} else {
 		sent = conn.GetSentNotifications()
 	}
 
 	// requeue notifications before anything sent to s.notifc
-	c := make(chan *PushNotification)
+	c := make(chan *Notification)
 	s.prioNotifc.Add(c)
 
 	go func() {
-		for _, pn := range sent {
-			log.Printf("Requeuing notification %v", pn.Identifier)
-			c <- pn
+		for _, n := range sent {
+			log.Printf("Requeuing notification %v", n.Identifier)
+			c <- n
 		}
 		close(c)
 	}()
 }
 
-func (s *Sender) doSend(pn *PushNotification) {
+func (s *Sender) doSend(n *Notification) {
 
 	for {
 		s.connect()
 
-		if connError, err := s.conn.Write(pn); err != nil {
+		if connError, err := s.conn.Write(n); err != nil {
 			if connError {
 				s.conn.Close()
 				s.conn = nil

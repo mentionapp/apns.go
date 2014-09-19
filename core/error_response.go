@@ -15,7 +15,7 @@ type ErrorResponseStatus uint8
 type ErrorResponse struct {
 	Command    ErrorResponseCommand
 	Status     ErrorResponseStatus
-	Identifier uint32
+	Identifier NotificationIdentifier
 }
 
 // Known values of ErrorResponseCommand
@@ -70,7 +70,7 @@ func DecodeErrorResponse(r []byte) (*ErrorResponse, error) {
 	er := &ErrorResponse{
 		Command:    ErrorResponseCommand(r[0]),
 		Status:     ErrorResponseStatus(r[1]),
-		Identifier: binary.BigEndian.Uint32(r[2:]),
+		Identifier: NotificationIdentifier(binary.BigEndian.Uint32(r[2:])),
 	}
 
 	return er, nil
