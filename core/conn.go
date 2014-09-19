@@ -3,6 +3,7 @@ package apns
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"time"
 )
@@ -11,7 +12,7 @@ type conn struct {
 	conn  net.Conn
 	sent  *queue
 	donec chan struct{}
-	readc chan *PushNotificationResponse
+	readc chan *ErrorResponse
 }
 
 // newConn creates a new conn instance
@@ -46,7 +47,7 @@ func newConn(addr string, cert *tls.Certificate) (*conn, error) {
 		conn:  tlsConn,
 		sent:  q,
 		donec: make(chan struct{}),
-		readc: make(chan *PushNotificationResponse, 1),
+		readc: make(chan *ErrorResponse, 1),
 	}
 
 	go conn.read()
@@ -73,7 +74,7 @@ func (c *conn) Write(pn *PushNotification) (connError bool, err error) {
 	return false, nil
 }
 
-func (c *conn) Read() <-chan *PushNotificationResponse {
+func (c *conn) Read() <-chan *ErrorResponse {
 	return c.readc
 }
 
@@ -108,14 +109,17 @@ func (c *conn) Expire() {
 
 func (c *conn) read() {
 
-	buffer := make([]byte, 6)
+	var resp *ErrorResponse
+	var err error
+
+	buffer := make([]byte, ErrorResponseLength)
 	n, _ := c.conn.Read(buffer)
 
-	var resp *PushNotificationResponse
-
 	if n == len(buffer) {
-		resp = &PushNotificationResponse{}
-		resp.FromRawAppleResponse(buffer)
+		resp, err = DecodeErrorResponse(buffer)
+		if err != nil {
+			log.Printf("Failed decoding error-response: %v", err)
+		}
 	}
 
 	c.readc <- resp

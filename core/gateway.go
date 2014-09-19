@@ -47,11 +47,11 @@ type Gateway struct {
 
 type PushNotificationRequestResponse struct {
 	Notification *PushNotification
-	Response     *PushNotificationResponse
+	Response     *ErrorResponse
 }
 
 // OnErrorCallback functions are called to let the library client react when an error occured
-type OnErrorCallback func(*PushNotification, *PushNotificationResponse)
+type OnErrorCallback func(*PushNotification, *ErrorResponse)
 
 func init() {
 	// Initialize at startup the rand seed

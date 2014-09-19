@@ -22,7 +22,7 @@ type Sender struct {
 }
 
 type readEvent struct {
-	resp *PushNotificationResponse
+	resp *ErrorResponse
 	conn *conn
 }
 
