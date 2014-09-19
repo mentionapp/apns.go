@@ -38,6 +38,7 @@ const (
 	UnknownErrorStatus            ErrorResponseStatus = 255
 )
 
+// ErrorResponseLength is the length of error-response packets
 const ErrorResponseLength = 6
 
 var errorResponseStatusNames = map[ErrorResponseStatus]string{
@@ -61,10 +62,11 @@ func (e ErrorResponseStatus) String() string {
 	return "INVALID"
 }
 
+// DecodeErrorResponse decodes an error-response packet
 func DecodeErrorResponse(r []byte) (*ErrorResponse, error) {
 
 	if len(r) != ErrorResponseLength {
-		return nil, fmt.Errorf("Invalid buffer length: expected %v bytes, got %v", ErrorResponseLength, len(r))
+		return nil, fmt.Errorf("invalid buffer length: expected %v bytes, got %v", ErrorResponseLength, len(r))
 	}
 
 	er := &ErrorResponse{

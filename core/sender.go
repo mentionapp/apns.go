@@ -20,6 +20,7 @@ type Sender struct {
 	readc      chan *readEvent
 }
 
+// ErrorFeedback represents an error feedback
 type ErrorFeedback struct {
 	Notification  *Notification
 	ErrorResponse *ErrorResponse

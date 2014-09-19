@@ -59,14 +59,14 @@ func (c *conn) Write(n *Notification) (connError bool, err error) {
 
 	payload, err := n.Encode()
 	if err != nil {
-		return false, fmt.Errorf("Failed encoding notification %v: %v", n.Identifier(), err)
+		return false, fmt.Errorf("failed encoding notification %v: %v", n.Identifier(), err)
 	}
 
 	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 60))
 	if l, err := c.conn.Write(payload); err != nil {
-		return true, fmt.Errorf("Failed sending notification %v: %v", n.Identifier(), err)
+		return true, fmt.Errorf("failed sending notification %v: %v", n.Identifier(), err)
 	} else if l != len(payload) {
-		return true, fmt.Errorf("Failed sending notification %v: wrote %v bytes, expected %v", n.Identifier(), l, len(payload))
+		return true, fmt.Errorf("failed sending notification %v: wrote %v bytes, expected %v", n.Identifier(), l, len(payload))
 	}
 
 	c.sent.Add(n)
