@@ -79,9 +79,13 @@ func (m *priochan) read() {
 			case m.outc <- e:
 				return true
 			case c, ok := <-m.chanc:
-				if !handleChan(c, ok) {
-					return false
+				if ok {
+					inflight := make(chan *Notification, 1)
+					inflight <- e
+					close(inflight)
+					handleChan(inflight, true)
 				}
+				return handleChan(c, ok)
 			}
 		}
 	}
