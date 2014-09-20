@@ -84,7 +84,7 @@ for_loop:
 		case ev := <-s.readc:
 			s.handleRead(ev)
 		case n := <-s.prioNotifc.Receive():
-			log.Printf("Sending notification %v", n.Identifier)
+			log.Printf("Sending notification %v", n.Identifier())
 			s.doSend(n)
 		case <-ticker:
 			if s.conn != nil {
@@ -138,7 +138,7 @@ func (s *Sender) handleRead(ev *readEvent) {
 
 	go func() {
 		for _, n := range sent {
-			log.Printf("Requeuing notification %v", n.Identifier)
+			log.Printf("Requeuing notification %v", n.Identifier())
 			c <- n
 		}
 		close(c)
