@@ -156,7 +156,8 @@ func (s *Sender) doSend(n *Notification) {
 				s.conn = nil
 				log.Printf("%v; will retry", err)
 			} else {
-				log.Println(err)
+				log.Printf("%v; notification is lost", err)
+				return
 			}
 		} else {
 			break
