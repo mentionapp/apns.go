@@ -16,15 +16,15 @@ type Sender struct {
 	conn       conn
 	notifc     chan *Notification
 	prioNotifc *priochan
-	errorc     chan *ErrorFeedback
+	errorc     chan *SenderError
 	readc      chan *readEvent
 	newConn    func(addr string, cert *tls.Certificate) (conn, error)
 	donec      chan struct{}
 	nextId     NotificationIdentifier
 }
 
-// ErrorFeedback represents an error feedback
-type ErrorFeedback struct {
+// SenderError represents a sender error
+type SenderError struct {
 	Notification  *Notification
 	ErrorResponse *ErrorResponse
 }
@@ -41,7 +41,7 @@ func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender 
 		cert:       cert,
 		notifc:     make(chan *Notification),
 		prioNotifc: newPriochan(),
-		errorc:     make(chan *ErrorFeedback),
+		errorc:     make(chan *SenderError),
 		readc:      make(chan *readEvent),
 		newConn:    newConn,
 		donec:      make(chan struct{}),
@@ -59,8 +59,8 @@ func (s *Sender) Notifications() chan *Notification {
 	return s.notifc
 }
 
-// ErrorFeedbacks returns the channel from which to receive ErrorFeedbacks
-func (s *Sender) ErrorFeedbacks() <-chan *ErrorFeedback {
+// Errors returns the channel from which to receive SenderErrors
+func (s *Sender) Errors() <-chan *SenderError {
 	return s.errorc
 }
 
@@ -124,7 +124,7 @@ func (s *Sender) handleRead(ev *readEvent) {
 			// for ShutdownErrorStatus, the Identifier indicates the last
 			// notification that was successfully sent
 			if resp.Status != ShutdownErrorStatus {
-				s.errorc <- &ErrorFeedback{
+				s.errorc <- &SenderError{
 					Notification:  n,
 					ErrorResponse: resp,
 				}

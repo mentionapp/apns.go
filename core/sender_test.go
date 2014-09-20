@@ -88,7 +88,7 @@ func sendNotifs(s *Sender, n []*Notification) {
 func drainErrors(s *Sender) {
 	for {
 		select {
-		case <-s.ErrorFeedbacks():
+		case <-s.Errors():
 		case <-s.Done():
 			return
 		}
