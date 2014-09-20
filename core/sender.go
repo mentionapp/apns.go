@@ -13,11 +13,12 @@ import (
 type Sender struct {
 	addr       string
 	cert       *tls.Certificate
-	conn       *conn
+	conn       conn
 	notifc     chan *Notification
 	prioNotifc *priochan
 	errorc     chan *ErrorFeedback
 	readc      chan *readEvent
+	newConn    func(addr string, cert *tls.Certificate) (conn, error)
 }
 
 // ErrorFeedback represents an error feedback
@@ -28,7 +29,7 @@ type ErrorFeedback struct {
 
 type readEvent struct {
 	resp *ErrorResponse
-	conn *conn
+	conn conn
 }
 
 // NewSender creates a new Sender
@@ -40,6 +41,7 @@ func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender 
 		prioNotifc: newPriochan(),
 		errorc:     make(chan *ErrorFeedback),
 		readc:      make(chan *readEvent),
+		newConn:    newConn,
 	}
 
 	s.prioNotifc.Add(s.notifc)
@@ -155,12 +157,12 @@ func (s *Sender) doSend(n *Notification) {
 func (s *Sender) connect() {
 
 	for s.conn == nil {
-		var conn *conn
+		var conn conn
 		var err error
 
 		connect := func() error {
 			log.Printf("Connecting to %v", s.addr)
-			conn, err = newConn(s.addr, s.cert)
+			conn, err = s.newConn(s.addr, s.cert)
 			if err != nil {
 				log.Printf("Failed connecting to %v: %v; will retry", s.addr, err)
 				return err
@@ -180,7 +182,7 @@ func (s *Sender) connect() {
 	}
 }
 
-func (s *Sender) read(c *conn) {
+func (s *Sender) read(c conn) {
 	for {
 		select {
 		case <-c.Done():

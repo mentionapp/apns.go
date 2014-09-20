@@ -8,7 +8,18 @@ import (
 	"time"
 )
 
-type conn struct {
+type conn interface {
+	Write(n *Notification) (connError bool, err error)
+	Read() <-chan *ErrorResponse
+	Done() <-chan struct{}
+	Close()
+	GetSentNotification(identifier NotificationIdentifier) *Notification
+	GetSentNotificationsAfter(identifier NotificationIdentifier) []*Notification
+	GetSentNotifications() []*Notification
+	Expire()
+}
+
+type netConn struct {
 	conn  net.Conn
 	sent  *queue
 	donec chan struct{}
@@ -16,7 +27,7 @@ type conn struct {
 }
 
 // newConn creates a new conn instance
-func newConn(addr string, cert *tls.Certificate) (*conn, error) {
+func newConn(addr string, cert *tls.Certificate) (conn, error) {
 
 	c, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -43,7 +54,7 @@ func newConn(addr string, cert *tls.Certificate) (*conn, error) {
 
 	q := newQueue(time.Second * 60)
 
-	conn := &conn{
+	conn := &netConn{
 		conn:  tlsConn,
 		sent:  q,
 		donec: make(chan struct{}),
@@ -55,7 +66,7 @@ func newConn(addr string, cert *tls.Certificate) (*conn, error) {
 	return conn, nil
 }
 
-func (c *conn) Write(n *Notification) (connError bool, err error) {
+func (c *netConn) Write(n *Notification) (connError bool, err error) {
 
 	payload, err := n.Encode()
 	if err != nil {
@@ -74,15 +85,15 @@ func (c *conn) Write(n *Notification) (connError bool, err error) {
 	return false, nil
 }
 
-func (c *conn) Read() <-chan *ErrorResponse {
+func (c *netConn) Read() <-chan *ErrorResponse {
 	return c.readc
 }
 
-func (c *conn) Done() <-chan struct{} {
+func (c *netConn) Done() <-chan struct{} {
 	return c.donec
 }
 
-func (c *conn) Close() {
+func (c *netConn) Close() {
 	select {
 	case <-c.donec:
 	default:
@@ -91,23 +102,23 @@ func (c *conn) Close() {
 	}
 }
 
-func (c *conn) GetSentNotification(identifier NotificationIdentifier) *Notification {
+func (c *netConn) GetSentNotification(identifier NotificationIdentifier) *Notification {
 	return c.sent.Get(identifier)
 }
 
-func (c *conn) GetSentNotificationsAfter(identifier NotificationIdentifier) []*Notification {
+func (c *netConn) GetSentNotificationsAfter(identifier NotificationIdentifier) []*Notification {
 	return c.sent.GetAllAfter(identifier)
 }
 
-func (c *conn) GetSentNotifications() []*Notification {
+func (c *netConn) GetSentNotifications() []*Notification {
 	return c.sent.GetAll()
 }
 
-func (c *conn) Expire() {
+func (c *netConn) Expire() {
 	c.sent.Expire()
 }
 
-func (c *conn) read() {
+func (c *netConn) read() {
 
 	var resp *ErrorResponse
 	var err error
