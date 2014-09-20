@@ -25,7 +25,7 @@ type NotificationPriority uint8
 type Notification struct {
 	deviceToken string
 	payload     Payload
-	identifier  NotificationIdentifier
+	identifier  *NotificationIdentifier
 	expiry      time.Duration
 	priority    NotificationPriority
 }
@@ -127,15 +127,24 @@ func (n *Notification) Payload() Payload {
 	return n.payload
 }
 
-// SetIdentifier sets the notification identifier. Two notifications sent to the
-// same Sender must have different identifiers.
+// SetIdentifier sets a custom identifier. Two notifications sent to the
+// same Sender must have different identifiers. Sender automatically chooses an
+// identifier if one was not set.
 func (n *Notification) SetIdentifier(identifier NotificationIdentifier) {
-	n.identifier = identifier
+	n.identifier = &identifier
 }
 
 // Identifier returns the Identifier
 func (n *Notification) Identifier() NotificationIdentifier {
-	return n.identifier
+	if n.identifier != nil {
+		return *n.identifier
+	}
+	return 0
+}
+
+// HasIdentifier returns whether the Identifier has been set
+func (n *Notification) HasIdentifier() bool {
+	return n.identifier != nil
 }
 
 // SetExpiry sets the expiry. Fractions of seconds are truncated. APNS discards
@@ -195,9 +204,12 @@ func (n *Notification) Encode() ([]byte, error) {
 	binary.Write(frameBuffer, BE, uint16(len(payload)))
 	binary.Write(frameBuffer, BE, payload)
 
+	if n.identifier == nil {
+		return nil, fmt.Errorf("identifier was not set")
+	}
 	binary.Write(frameBuffer, BE, uint8(notificationIdentifierItemid))
 	binary.Write(frameBuffer, BE, uint16(notificationIdentifierLength))
-	binary.Write(frameBuffer, BE, n.identifier)
+	binary.Write(frameBuffer, BE, *n.identifier)
 
 	binary.Write(frameBuffer, BE, uint8(expirationDateItemid))
 	binary.Write(frameBuffer, BE, uint16(expirationDateLength))

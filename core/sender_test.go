@@ -303,3 +303,49 @@ func TestSenderDoesNotRetryNonConnErrors(t *testing.T) {
 
 	assert.Equal(t, []NotificationIdentifier{0, 1, 2, 3, 5}, sent)
 }
+
+func TestSenderAssignsIdentifiers(t *testing.T) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	addr := "example.com:1234"
+	cert := &tls.Certificate{}
+
+	n := []*Notification{
+		&Notification{},
+		&Notification{},
+	}
+
+	mocks := []*mock.Mock{}
+	sent := []NotificationIdentifier{}
+
+	s := NewSender(ctx, addr, cert)
+	s.newConn = func(addr string, cert *tls.Certificate) (conn, error) {
+
+		c := newMockConn()
+
+		c.write = func(n *Notification) (connError bool, err error) {
+			sent = append(sent, n.Identifier())
+			return
+		}
+
+		c.On("Close").Return().Once()
+
+		mocks = append(mocks, &c.Mock)
+		return c, nil
+	}
+
+	go sendNotifs(s, n)
+	go drainErrors(s)
+
+	waitUntil(func() bool { return len(sent) == 2 })
+
+	cancel()
+
+	<-s.Done()
+
+	for _, m := range mocks {
+		m.AssertExpectations(t)
+	}
+
+	assert.Equal(t, []NotificationIdentifier{0, 1}, sent)
+}

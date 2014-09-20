@@ -20,6 +20,7 @@ type Sender struct {
 	readc      chan *readEvent
 	newConn    func(addr string, cert *tls.Certificate) (conn, error)
 	donec      chan struct{}
+	nextId     NotificationIdentifier
 }
 
 // ErrorFeedback represents an error feedback
@@ -85,6 +86,10 @@ for_loop:
 		case ev := <-s.readc:
 			s.handleRead(ev)
 		case n := <-s.prioNotifc.Receive():
+			if !n.HasIdentifier() {
+				n.SetIdentifier(s.nextId)
+				s.nextId++
+			}
 			log.Printf("Sending notification %v", n.Identifier())
 			s.doSend(n)
 		case <-ticker:
