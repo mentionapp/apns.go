@@ -19,6 +19,7 @@ type Sender struct {
 	errorc     chan *ErrorFeedback
 	readc      chan *readEvent
 	newConn    func(addr string, cert *tls.Certificate) (conn, error)
+	donec      chan struct{}
 }
 
 // ErrorFeedback represents an error feedback
@@ -42,6 +43,7 @@ func NewSender(ctx context.Context, addr string, cert *tls.Certificate) *Sender 
 		errorc:     make(chan *ErrorFeedback),
 		readc:      make(chan *readEvent),
 		newConn:    newConn,
+		donec:      make(chan struct{}),
 	}
 
 	s.prioNotifc.Add(s.notifc)
@@ -61,10 +63,16 @@ func (s *Sender) ErrorFeedbacks() <-chan *ErrorFeedback {
 	return s.errorc
 }
 
+// Done returns a channel that's closed when this Sender has terminated
+func (s *Sender) Done() <-chan struct{} {
+	return s.donec
+}
+
 func (s *Sender) senderJob(ctx context.Context) {
 
 	ticker := time.Tick(time.Second)
 
+for_loop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -72,7 +80,7 @@ func (s *Sender) senderJob(ctx context.Context) {
 				s.conn.Close()
 			}
 			s.prioNotifc.Close()
-			return
+			break for_loop
 		case ev := <-s.readc:
 			s.handleRead(ev)
 		case n := <-s.prioNotifc.Receive():
@@ -84,6 +92,8 @@ func (s *Sender) senderJob(ctx context.Context) {
 			}
 		}
 	}
+
+	close(s.donec)
 }
 
 func (s *Sender) handleRead(ev *readEvent) {
