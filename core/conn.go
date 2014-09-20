@@ -123,11 +123,11 @@ func (c *netConn) read() {
 	var resp *ErrorResponse
 	var err error
 
-	buffer := make([]byte, ErrorResponseLength)
+	buffer := make([]byte, errorResponseLen)
 	n, _ := c.conn.Read(buffer)
 
 	if n == len(buffer) {
-		resp, err = DecodeErrorResponse(buffer)
+		resp, err = decodeErrorResponse(buffer)
 		if err != nil {
 			log.Printf("Failed decoding error-response: %v", err)
 		}

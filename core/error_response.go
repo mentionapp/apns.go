@@ -8,7 +8,7 @@ import (
 // ErrorResponseCommand represents the Command field of error-response packets
 type ErrorResponseCommand uint8
 
-// ErrorResponseStatus represents to Status field of error-response packets
+// ErrorResponseStatus represents the Status field of error-response packets
 type ErrorResponseStatus uint8
 
 // ErrorResponse represents an APNS error-response packet
@@ -38,8 +38,7 @@ const (
 	UnknownErrorStatus            ErrorResponseStatus = 255
 )
 
-// ErrorResponseLength is the length of error-response packets
-const ErrorResponseLength = 6
+const errorResponseLen = 6
 
 var errorResponseStatusNames = map[ErrorResponseStatus]string{
 	NoErrorsStatus:                "NO_ERRORS",
@@ -62,11 +61,10 @@ func (e ErrorResponseStatus) String() string {
 	return "INVALID"
 }
 
-// DecodeErrorResponse decodes an error-response packet
-func DecodeErrorResponse(r []byte) (*ErrorResponse, error) {
+func decodeErrorResponse(r []byte) (*ErrorResponse, error) {
 
-	if len(r) != ErrorResponseLength {
-		return nil, fmt.Errorf("invalid buffer length: expected %v bytes, got %v", ErrorResponseLength, len(r))
+	if len(r) != errorResponseLen {
+		return nil, fmt.Errorf("invalid buffer length: expected %v bytes, got %v", errorResponseLen, len(r))
 	}
 
 	er := &ErrorResponse{

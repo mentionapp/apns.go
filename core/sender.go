@@ -63,7 +63,8 @@ func (s *Sender) ErrorFeedbacks() <-chan *ErrorFeedback {
 	return s.errorc
 }
 
-// Done returns a channel that's closed when this Sender has terminated
+// Done returns a channel that's closed when this Sender has terminated (usually
+// after ctx.Done() has been closed).
 func (s *Sender) Done() <-chan struct{} {
 	return s.donec
 }

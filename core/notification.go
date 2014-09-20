@@ -9,11 +9,8 @@ import (
 	"time"
 )
 
-// Push commands always start with command value 2.
-const pushCommandValue = 2
-
-// Your total notification payload cannot exceed 256 bytes.
-const MaxPayloadSizeBytes = 256
+// MaxPayloadLen is the maximum allowed payload length (after JSON encoding)
+const MaxPayloadLen = 256
 
 // Payload represents a notification payload
 type Payload map[string]interface{}
@@ -43,11 +40,14 @@ type AlertDictionary struct {
 }
 
 const (
-	// ImmediatePriority sets the push message to be sent immediately
+	// ImmediatePriority sets the push message to be sent immediately. This is
+	// the default.
 	ImmediatePriority NotificationPriority = 10
 	// PowerSavingPriority sets the push message to be sent at a time that conserves power on the device receiving it
 	PowerSavingPriority NotificationPriority = 5
 )
+
+const pushCommandValue = 2
 
 // Constants related to the payload fields and their lengths.
 const (
@@ -88,7 +88,7 @@ func (p Payload) Set(name string, value interface{}) {
 }
 
 // ToJSON encodes the Payload to JSON. The encoded payload cannot exceed
-// MaxPayloadSizeBytes bytes
+// MaxPayloadLen bytes
 func (p Payload) ToJSON() ([]byte, error) {
 	return json.Marshal(p)
 }
@@ -127,7 +127,8 @@ func (n *Notification) Payload() Payload {
 	return n.payload
 }
 
-// SetIdentifier returns the Identifier. Must be unique among a Sender instance
+// SetIdentifier sets the notification identifier. Two notifications sent to the
+// same Sender must have different identifiers.
 func (n *Notification) SetIdentifier(identifier NotificationIdentifier) {
 	n.identifier = identifier
 }
@@ -137,7 +138,10 @@ func (n *Notification) Identifier() NotificationIdentifier {
 	return n.identifier
 }
 
-// SetExpiry sets the expiry
+// SetExpiry sets the expiry. Fractions of seconds are truncated. APNS discards
+// the notification if it wasn't able to send it after this duration. An expiry
+// of 0 means that the notification is discarded immediately by APNS if it can
+// not be sent (the is the default).
 func (n *Notification) SetExpiry(expiry time.Duration) {
 	n.expiry = expiry
 }
@@ -147,7 +151,7 @@ func (n *Notification) Expiry() time.Duration {
 	return n.expiry
 }
 
-// SetPriority returns the priority
+// SetPriority sets the priority. The default is ImmediatePriority.
 func (n *Notification) SetPriority(priority NotificationPriority) {
 	n.priority = priority
 }
@@ -175,8 +179,8 @@ func (n *Notification) Encode() ([]byte, error) {
 		return nil, err
 	}
 
-	if len(payload) > MaxPayloadSizeBytes {
-		return nil, fmt.Errorf("payload is larger than the %v byte limit", MaxPayloadSizeBytes)
+	if len(payload) > MaxPayloadLen {
+		return nil, fmt.Errorf("payload is larger than the %v byte limit", MaxPayloadLen)
 	}
 
 	BE := binary.BigEndian
