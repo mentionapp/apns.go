@@ -99,7 +99,7 @@ func (p Payload) aps() map[string]interface{} {
 			return aps
 		}
 	}
-	aps := make(map[string]interface{})
+	aps := map[string]interface{}{}
 	p["aps"] = aps
 	return aps
 }
@@ -107,7 +107,7 @@ func (p Payload) aps() map[string]interface{} {
 // NewNotification creates a new Notification
 func NewNotification() *Notification {
 	n := &Notification{}
-	n.payload = make(Payload)
+	n.payload = Payload{}
 	n.priority = ImmediatePriority
 	return n
 }
