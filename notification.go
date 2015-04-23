@@ -26,7 +26,7 @@ type Notification struct {
 	deviceToken string
 	payload     Payload
 	identifier  *NotificationIdentifier
-	expiry      time.Duration
+	expiry      time.Time
 	priority    NotificationPriority
 }
 
@@ -151,12 +151,12 @@ func (n *Notification) HasIdentifier() bool {
 // the notification if it wasn't able to send it after this duration. An expiry
 // of 0 means that the notification is discarded immediately by APNS if it can
 // not be sent (the is the default).
-func (n *Notification) SetExpiry(expiry time.Duration) {
+func (n *Notification) SetExpiry(expiry time.Time) {
 	n.expiry = expiry
 }
 
 // Expiry returns the expiry
-func (n *Notification) Expiry() time.Duration {
+func (n *Notification) Expiry() time.Time {
 	return n.expiry
 }
 
@@ -213,7 +213,7 @@ func (n *Notification) Encode() ([]byte, error) {
 
 	binary.Write(frameBuffer, BE, uint8(expirationDateItemid))
 	binary.Write(frameBuffer, BE, uint16(expirationDateLength))
-	binary.Write(frameBuffer, BE, uint32(n.expiry.Seconds()))
+	binary.Write(frameBuffer, BE, uint32(n.expiry.Unix()))
 
 	binary.Write(frameBuffer, BE, uint8(priorityItemid))
 	binary.Write(frameBuffer, BE, uint16(priorityLength))
