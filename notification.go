@@ -12,6 +12,11 @@ import (
 // MaxPayloadLen is the maximum allowed payload length (after JSON encoding)
 const MaxPayloadLen = 256
 
+// Interface for universal notification payload
+type Topic interface {
+	Bytes() ([]byte, error)
+}
+
 // Payload represents a notification payload
 type Payload map[string]interface{}
 
@@ -24,7 +29,7 @@ type NotificationPriority uint8
 // Notification represents a notification
 type Notification struct {
 	deviceToken string
-	payload     Payload
+	payload     Topic
 	identifier  *NotificationIdentifier
 	expiry      time.Time
 	priority    NotificationPriority
@@ -47,19 +52,19 @@ const (
 	PowerSavingPriority NotificationPriority = 5
 )
 
-const pushCommandValue = 2
+const pushCommandValue uint8 = 2
 
 // Constants related to the payload fields and their lengths.
 const (
-	deviceTokenItemid            = 1
-	payloadItemid                = 2
-	notificationIdentifierItemid = 3
-	expirationDateItemid         = 4
-	priorityItemid               = 5
-	deviceTokenLength            = 32
-	notificationIdentifierLength = 4
-	expirationDateLength         = 4
-	priorityLength               = 1
+	deviceTokenItemid            uint8  = 1
+	payloadItemid                uint8  = 2
+	notificationIdentifierItemid uint8  = 3
+	expirationDateItemid         uint8  = 4
+	priorityItemid               uint8  = 5
+	deviceTokenLength            uint16 = 32
+	notificationIdentifierLength uint16 = 4
+	expirationDateLength         uint16 = 4
+	priorityLength               uint16 = 1
 )
 
 // SetAlertString sets the alert item as a string
@@ -89,7 +94,14 @@ func (p Payload) Set(name string, value interface{}) {
 
 // ToJSON encodes the Payload to JSON. The encoded payload cannot exceed
 // MaxPayloadLen bytes
+// deprecated
 func (p Payload) ToJSON() ([]byte, error) {
+	return p.Bytes()
+}
+
+// ToJSON encodes the Payload to JSON. The encoded payload cannot exceed
+// MaxPayloadLen bytes
+func (p Payload) Bytes() ([]byte, error) {
 	return json.Marshal(p)
 }
 
@@ -122,8 +134,13 @@ func (n *Notification) DeviceToken() string {
 	return n.deviceToken
 }
 
+// SetPayload sets the Payload.
+func (n *Notification) SetPayload(payload Topic) {
+	n.payload = payload
+}
+
 // Payload returns the Payload
-func (n *Notification) Payload() Payload {
+func (n *Notification) Payload() Topic {
 	return n.payload
 }
 
@@ -177,13 +194,12 @@ func NewAlertDictionary() *AlertDictionary {
 
 // Encode encodes a notification packet
 func (n *Notification) Encode() ([]byte, error) {
-
 	token, err := hex.DecodeString(n.deviceToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed decoding device token %q: %v", n.deviceToken, err)
 	}
 
-	payload, err := n.payload.ToJSON()
+	payload, err := n.payload.Bytes()
 	if err != nil {
 		return nil, err
 	}
@@ -196,31 +212,31 @@ func (n *Notification) Encode() ([]byte, error) {
 
 	frameBuffer := &bytes.Buffer{}
 
-	binary.Write(frameBuffer, BE, uint8(deviceTokenItemid))
-	binary.Write(frameBuffer, BE, uint16(deviceTokenLength))
+	binary.Write(frameBuffer, BE, deviceTokenItemid)
+	binary.Write(frameBuffer, BE, deviceTokenLength)
 	binary.Write(frameBuffer, BE, token)
 
-	binary.Write(frameBuffer, BE, uint8(payloadItemid))
+	binary.Write(frameBuffer, BE, payloadItemid)
 	binary.Write(frameBuffer, BE, uint16(len(payload)))
 	binary.Write(frameBuffer, BE, payload)
 
 	if n.identifier == nil {
 		return nil, fmt.Errorf("identifier was not set")
 	}
-	binary.Write(frameBuffer, BE, uint8(notificationIdentifierItemid))
-	binary.Write(frameBuffer, BE, uint16(notificationIdentifierLength))
+	binary.Write(frameBuffer, BE, notificationIdentifierItemid)
+	binary.Write(frameBuffer, BE, notificationIdentifierLength)
 	binary.Write(frameBuffer, BE, *n.identifier)
 
-	binary.Write(frameBuffer, BE, uint8(expirationDateItemid))
-	binary.Write(frameBuffer, BE, uint16(expirationDateLength))
+	binary.Write(frameBuffer, BE, expirationDateItemid)
+	binary.Write(frameBuffer, BE, expirationDateLength)
 	binary.Write(frameBuffer, BE, uint32(n.expiry.Unix()))
 
-	binary.Write(frameBuffer, BE, uint8(priorityItemid))
-	binary.Write(frameBuffer, BE, uint16(priorityLength))
+	binary.Write(frameBuffer, BE, priorityItemid)
+	binary.Write(frameBuffer, BE, priorityLength)
 	binary.Write(frameBuffer, BE, n.priority)
 
 	buffer := bytes.NewBuffer([]byte{})
-	binary.Write(buffer, BE, uint8(pushCommandValue))
+	binary.Write(buffer, BE, pushCommandValue)
 	binary.Write(buffer, BE, uint32(frameBuffer.Len()))
 	binary.Write(buffer, BE, frameBuffer.Bytes())
 
