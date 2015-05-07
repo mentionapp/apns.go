@@ -9,6 +9,8 @@ import (
 	"github.com/cenkalti/backoff"
 )
 
+var Verbose bool
+
 // Sender sends notifications
 type Sender struct {
 	addr       string
@@ -32,6 +34,12 @@ type SenderError struct {
 type readEvent struct {
 	resp *ErrorResponse
 	conn conn
+}
+
+func info(format string, v ...interface{}) {
+	if Verbose {
+		log.Printf(format, v...)
+	}
 }
 
 // NewSender creates a new Sender
@@ -71,10 +79,9 @@ func (s *Sender) Done() <-chan struct{} {
 }
 
 func (s *Sender) senderJob(ctx context.Context) {
-
 	ticker := time.Tick(time.Second)
 
-for_loop:
+start:
 	for {
 		select {
 		case <-ctx.Done():
@@ -82,7 +89,7 @@ for_loop:
 				s.conn.Close()
 			}
 			s.prioNotifc.Close()
-			break for_loop
+			break start
 		case ev := <-s.readc:
 			s.handleRead(ev)
 		case n := <-s.prioNotifc.Receive():
@@ -90,7 +97,7 @@ for_loop:
 				n.SetIdentifier(s.nextId)
 				s.nextId++
 			}
-			log.Printf("Sending notification %v", n.Identifier())
+			info("Sending notification %v", n.Identifier())
 			s.doSend(n)
 		case <-ticker:
 			if s.conn != nil {
@@ -103,7 +110,6 @@ for_loop:
 }
 
 func (s *Sender) handleRead(ev *readEvent) {
-
 	var n *Notification
 	var sent []*Notification
 	conn := ev.conn
@@ -117,9 +123,9 @@ func (s *Sender) handleRead(ev *readEvent) {
 		n = conn.GetSentNotification(resp.Identifier)
 
 		if n == nil {
-			log.Printf("Got a response for unknown notification %v", resp.Identifier)
+			info("Got a response for unknown notification %v", resp.Identifier)
 		} else {
-			log.Printf("Got a response for notification %v", resp.Identifier)
+			info("Got a response for notification %v", resp.Identifier)
 
 			// for ShutdownErrorStatus, the Identifier indicates the last
 			// notification that was successfully sent
@@ -144,7 +150,7 @@ func (s *Sender) handleRead(ev *readEvent) {
 
 	go func() {
 		for _, n := range sent {
-			log.Printf("Requeuing notification %v", n.Identifier())
+			info("Requeuing notification %v", n.Identifier())
 			c <- n
 		}
 		close(c)
@@ -152,7 +158,6 @@ func (s *Sender) handleRead(ev *readEvent) {
 }
 
 func (s *Sender) doSend(n *Notification) {
-
 	for {
 		s.connect()
 
@@ -160,9 +165,9 @@ func (s *Sender) doSend(n *Notification) {
 			if connError {
 				s.conn.Close()
 				s.conn = nil
-				log.Printf("%v; will retry", err)
+				info("%v; will retry", err)
 			} else {
-				log.Printf("%v; notification is lost", err)
+				info("%v; notification is lost", err)
 				return
 			}
 		} else {
@@ -172,16 +177,15 @@ func (s *Sender) doSend(n *Notification) {
 }
 
 func (s *Sender) connect() {
-
 	for s.conn == nil {
 		var conn conn
 		var err error
 
 		connect := func() error {
-			log.Printf("Connecting to %v", s.addr)
+			info("Connecting to %v", s.addr)
 			conn, err = s.newConn(s.addr, s.cert)
 			if err != nil {
-				log.Printf("Failed connecting to %v: %v; will retry", s.addr, err)
+				info("Failed connecting to %v: %v; will retry", s.addr, err)
 				return err
 			}
 			return nil
@@ -191,7 +195,7 @@ func (s *Sender) connect() {
 			continue
 		}
 
-		log.Printf("Connected to %v", s.addr)
+		info("Connected to %v", s.addr)
 
 		go s.read(conn)
 
