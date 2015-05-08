@@ -9,6 +9,11 @@ import (
 	"github.com/cenkalti/backoff"
 )
 
+const (
+	SenderGateway        string = "gateway.push.apple.com:2195"
+	SenderSandboxGateway string = "gateway.sandbox.push.apple.com:2195"
+)
+
 var Verbose bool
 
 // Sender sends notifications
