@@ -26,17 +26,15 @@ type netConn struct {
 	readc chan *ErrorResponse
 }
 
-// newConn creates a new conn instance
-func newConn(addr string, cert *tls.Certificate) (conn, error) {
-
+func newTlsConn(addr string, cert *tls.Certificate) (conn net.Conn, err error) {
 	c, err := net.Dial("tcp", addr)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	name, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	tlsConf := &tls.Config{
@@ -45,13 +43,19 @@ func newConn(addr string, cert *tls.Certificate) (conn, error) {
 	}
 
 	tlsConn := tls.Client(c, tlsConf)
-
-	err = tlsConn.Handshake()
-	if err != nil {
+	if err = tlsConn.Handshake(); err != nil {
 		c.Close()
+		return
+	}
+	return tlsConn, nil
+}
+
+// newConn creates a new conn instance
+func newConn(addr string, cert *tls.Certificate) (conn, error) {
+	tlsConn, err := newTlsConn(addr, cert)
+	if err != nil {
 		return nil, err
 	}
-
 	q := newQueue(time.Second * 60)
 
 	conn := &netConn{
@@ -67,7 +71,6 @@ func newConn(addr string, cert *tls.Certificate) (conn, error) {
 }
 
 func (c *netConn) Write(n *Notification) (connError bool, err error) {
-
 	payload, err := n.Encode()
 	if err != nil {
 		return false, fmt.Errorf("failed encoding notification %v: %v", n.Identifier(), err)
@@ -119,7 +122,6 @@ func (c *netConn) Expire() {
 }
 
 func (c *netConn) read() {
-
 	var resp *ErrorResponse
 	var err error
 
