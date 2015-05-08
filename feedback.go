@@ -48,6 +48,15 @@ func (f *Feedback) Messages() <-chan *FeedbackMessage {
 
 func (f *Feedback) reader(ctx context.Context) {
 	var stop bool
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				stop = true
+				return
+			}
+		}
+	}()
 	for {
 		if stop {
 			break
@@ -63,16 +72,6 @@ func (f *Feedback) reader(ctx context.Context) {
 		}
 		time.Sleep(feedbackCheckPeriod)
 	}
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				stop = true
-				return
-			}
-		}
-	}()
 }
 
 func (f *Feedback) receive() (result []*FeedbackMessage, err error) {
