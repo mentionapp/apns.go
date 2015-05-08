@@ -25,7 +25,7 @@ func main() {
 
 	go func() {
 		// sender.Errors() is a channel
-		// It receives permanent sending errors (e.g. the invalid token).
+		// It receives permanent sending errors (e.g. the token is invalid).
 		// For this kind of errors, the library doesn't retry. The application
 		// might want to take action, though.
 		for senderError := range sender.Errors() {
