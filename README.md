@@ -50,7 +50,7 @@ func main() {
 
 ## Credits
 
- - [gsempe](https://github.com/arnaud-lb)
+ - [gsempe](https://github.com/gsempe)
  - [arnaud-lb](https://github.com/arnaud-lb)
  - [Contributors](https://github.com/mentionapp/apns.go/graphs/contributors)
  - Originally based on [anachronistic/apns](https://github.com/anachronistic/apns)
