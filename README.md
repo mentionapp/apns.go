@@ -40,8 +40,9 @@ func main() {
 	for msg := range msgs {
 		notif := apns.NewNotification()
 		notif.SetDeviceToken(msg.Token)
-		payload := notif.Payload().(*apns.Payload)
-		payload.SetAlertString(msg.Text)
+                payload := &apns.Payload{}
+                payload.SetAlertString(msg.Text)
+                notif.SetPayload(payload)
 		sender.Notifications() <- notif
 	}
 }
