@@ -20,6 +20,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	
+	apns.Verbose = true
 
 	sender := apns.NewSender(context.TODO(), apns.SenderSandboxGateway, &cert)
 
