@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/cenkalti/backoff"
+	"golang.org/x/net/context"
 )
 
 const (

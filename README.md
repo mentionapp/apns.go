@@ -10,7 +10,7 @@ package main
 import (
 	"crypto/tls"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 	"github.com/mentionapp/apns.go"
 )
 
